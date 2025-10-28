@@ -293,6 +293,62 @@ function showPaper(index) {
   document.getElementById("saveStatus").textContent = "";
 
   highlightActivePaper();
+
+  // ←★ここを追加：確定済みならロック、未確定なら編集OKにする
+  updateEditLockState(p.id);
+}
+
+// ====== この演題が確定済みなら編集不可にする ======
+function updateEditLockState(paperId) {
+  const reviewer = document.getElementById("reviewerName").value.trim();
+  const myReview = getMyReviewFor(paperId);
+
+  const isLocked = !!(myReview && myReview.finalized === true);
+
+  // スコアボタン
+  document.querySelectorAll(".score-btn").forEach(btn => {
+    btn.disabled = isLocked;
+    btn.style.opacity = isLocked ? "0.4" : "";
+    btn.style.cursor  = isLocked ? "not-allowed" : "pointer";
+  });
+
+  // コメント欄
+  const commentBox = document.getElementById("commentInput");
+  commentBox.disabled = isLocked;
+  commentBox.style.backgroundColor = isLocked ? "#eee" : "";
+  commentBox.style.opacity = isLocked ? "0.6" : "";
+  commentBox.style.cursor = isLocked ? "not-allowed" : "text";
+
+  // 「評価を保存」はロック中は押せない
+  const saveBtn = document.getElementById("saveBtn");
+  saveBtn.disabled = isLocked;
+  saveBtn.style.opacity = isLocked ? "0.4" : "";
+  saveBtn.style.cursor  = isLocked ? "not-allowed" : "pointer";
+
+  // 「評価を確定」はロック後は押しても意味がないので無効化しておく
+  const finalizeBtn = document.getElementById("finalizeBtn");
+  finalizeBtn.disabled = isLocked;
+  finalizeBtn.style.opacity = isLocked ? "0.4" : "";
+  finalizeBtn.style.cursor  = isLocked ? "not-allowed" : "pointer";
+
+  // 「未確定に戻す」はロック中だけ有効にする（逆に、ロックされていないときは無効でもOK）
+  const unfinalizeBtn = document.getElementById("unfinalizeBtn");
+  const canUnfinalize = isLocked;
+  unfinalizeBtn.disabled = !canUnfinalize;
+  unfinalizeBtn.style.opacity = canUnfinalize ? "" : "0.4";
+  unfinalizeBtn.style.cursor  = canUnfinalize ? "pointer" : "not-allowed";
+
+  // ステータス表示をわかりやすく
+  const statusEl = document.getElementById("saveStatus");
+  if (isLocked) {
+    statusEl.textContent = "この演題は確定済み（編集ロック中）🔒";
+  } else {
+    // 直前のメッセージはそのまま維持したいので、ここで無理に消さない
+    // ただし、空なら案内を少し出す
+    if (!statusEl.textContent) {
+      statusEl.textContent = "編集中（未確定）";
+    }
+  }
 }
 
 // ====== レビュー保存・確定・未確定 ======
@@ -378,6 +434,9 @@ function finalizeCurrentReview() {
 
   updateStatsUI();
   renderPaperList();
+
+  // ★UIロック反映
+  updateEditLockState(currentPaper.id);
 }
 
 function unfinalizeCurrentReview() {
@@ -411,6 +470,9 @@ function unfinalizeCurrentReview() {
 
   updateStatsUI();
   renderPaperList();
+
+  // ★UIロック反映（ロック解除されるので編集できるようになる）
+  updateEditLockState(currentPaper.id);
 }
 
 // ====== リスト表示と検索 ======
