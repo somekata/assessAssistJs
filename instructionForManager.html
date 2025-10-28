@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>事務局・管理者用マニュアル / 学会審査アシスタント</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Hiragino Sans", "Noto Sans JP", sans-serif;
+        line-height: 1.7;
+        color: #222;
+        background: #fafafa;
+        margin: 0;
+        padding: 24px;
+      }
+      header {
+        background: #2d3e50;
+        color: #fff;
+        border-radius: 8px;
+        padding: 16px 20px;
+        max-width: 900px;
+        margin: 0 auto 24px;
+      }
+      main {
+        max-width: 900px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin: 0 auto;
+        padding: 20px;
+        font-size: 0.9rem;
+      }
+      h2 {
+        font-size: 1rem;
+        border-left: 4px solid #2d3e50;
+        padding-left: 8px;
+        color: #2d3e50;
+        margin-top: 1.5em;
+      }
+      h3 {
+        margin-top: 1em;
+        font-size: 0.95rem;
+      }
+      .box {
+        background: #f5f9ff;
+        border: 1px solid #cdddfc;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin: 16px 0;
+      }
+      .warn {
+        background: #fff7e0;
+        border: 1px solid #e8d28c;
+      }
+      ul,
+      ol {
+        margin-left: 1.4em;
+      }
+      footer {
+        max-width: 900px;
+        margin: 24px auto 0;
+        font-size: 0.75rem;
+        color: #666;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>事務局・管理者用マニュアル</h1>
+      <p>GitHub Pages上で審査を運用する際の手順をまとめています。</p>
+    </header>
+
+    <main>
+      <h2>1. 運用の流れ</h2>
+      <ol>
+        <li>
+          <strong>GitHub Pages：</strong>
+          https://somekata.github.io/assessAssistJs/ にアプリを公開
+        </li>
+        <li>
+          <strong>事務局：</strong>
+          data.csv（演題リスト）を作成し、各審査員へメールで配布
+        </li>
+        <li>
+          <strong>審査員：</strong> data.csvをデスクトップに保存 →
+          上記サイトにアクセス → data.csvを読み込み
+        </li>
+        <li>
+          <strong>審査員：</strong> 採点後「CSVダウンロード」で review_XXX.csv
+          を提出
+        </li>
+        <li><strong>事務局：</strong> 各review_*.csvを集計</li>
+      </ol>
+
+      <div class="box warn">
+        重要：GitHub上には
+        <strong
+          >data.csv（本番データ）を絶対にアップロードしないでください。</strong
+        ><br />
+        抄録などの機密情報を含みます。
+      </div>
+
+      <h2>2. data.csv の作成ルール</h2>
+      <ul>
+        <li>ファイル名：<code>data.csv</code></li>
+        <li>形式：CSV（UTF-8）</li>
+        <li>ヘッダー行：<code>id,title,abstract</code></li>
+        <li>title と abstract は <code>""</code>（ダブルクォート）で括る</li>
+        <li>abstract に改行（Enter）は入れない（1演題=1行）</li>
+      </ul>
+
+      <pre><code>"S001","新規抗菌ペプチドの評価","多剤耐性菌に対する新規抗菌ペプチドをマウス敗血症モデルで検証した。"
+"S002","ICUにおけるASPの効果","集中治療室でASP導入前後の使用量を比較した。"
+</code></pre>
+
+      <p>
+        <strong>文字コードはUTF-8で保存</strong>してください。<br />
+        メモ帳の場合：「名前を付けて保存」→「エンコード」でUTF-8を選択。<br />
+        VSCodeで開くとエラー箇所（改行・クォート抜け）が視覚的に確認できます。
+      </p>
+
+      <h2>3. 審査員への案内方法</h2>
+
+      <ol>
+        <li>審査員に <strong>data.csv</strong> をメールで送付</li>
+        <li>次の手順を案内します：</li>
+      </ol>
+
+      <div class="box">
+        <ol>
+          <li>送付された <code>data.csv</code> をデスクトップに保存</li>
+          <li>
+            ブラウザで
+            <a href="https://somekata.github.io/assessAssistJs/" target="_blank"
+              >https://somekata.github.io/assessAssistJs/</a
+            >
+            を開く
+          </li>
+          <li>
+            右上の「data.csvを読み込む」からデスクトップの data.csv を選択
+          </li>
+          <li>データが表示されたら、審査者名を入力して採点開始</li>
+        </ol>
+      </div>
+
+      <h2>4. 審査員が出力するCSVの中身</h2>
+
+      <ul>
+        <li><code>reviewer</code>：審査者名(ID)</li>
+        <li><code>paper_id</code>：演題ID</li>
+        <li><code>score</code>：1〜5のスコア</li>
+        <li><code>comment</code>：コメント</li>
+        <li><code>timestamp</code>：最終保存時刻</li>
+        <li><code>finalized</code>：true＝確定済み / false＝未確定</li>
+      </ul>
+
+      <h2>5. 集計方法</h2>
+      <p>
+        各審査員から提出された <code>review_*.csv</code> をExcel等で集約し、
+        <code>paper_id</code> をキーに平均スコアやコメント一覧を作成します。
+      </p>
+
+      <div class="warn box">
+        審査員名と個人を直接結びつけないように配慮してください（ID制を推奨）。
+      </div>
+
+      <h2>6. よくあるトラブル</h2>
+      <ul>
+        <li>
+          <strong>文字化け：</strong> Shift_JISで保存されている可能性 →
+          UTF-8で保存し直し
+        </li>
+        <li>
+          <strong>data.csvが読み込めない：</strong>
+          改行・カンマ・クォートの整形ミス → VSCodeで確認
+        </li>
+      </ul>
+    </main>
+
+    <footer>
+      © 学会審査アシスタント<br />
+      完全ローカル動作。data.csvとreview_*.csvは機密情報として管理してください。
+    </footer>
+  </body>
+</html>
