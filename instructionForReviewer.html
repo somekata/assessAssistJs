@@ -75,6 +75,11 @@
         color: #666;
         text-align: center;
       }
+      span.redmark {
+        background-color: rgba(255, 0, 0, 0.1);
+        border-radius: 10px;
+        padding: 2px 10px;
+      }
     </style>
   </head>
   <body>
@@ -108,7 +113,13 @@
         ページが表示されたら、右上の
         <strong>「data.csvを読み込む」</strong>
         の欄にある「ファイルを選択」ボタンを押し、 デスクトップに保存した
-        <code>data.csv</code> を選択してください。
+        <code>data.csv</code> を選択してください*。<br />
+        読み込みが完了すると、ボタンの下に「読み込み完了：〇件」と表示されます。<br />
+        <span class="redmark"
+          ><small
+            >*ファイルのドラッグ＆ドロップでも読み込み可能です。</small
+          ></span
+        >
       </p>
 
       <p>数秒後、画面左に演題リスト、右に抄録が表示されます。</p>
