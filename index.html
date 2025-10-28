@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>学会審査アシスタント</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="left">
+        <h1>学会審査アシスタント</h1>
+        <p class="small">
+          1. 事務局から渡された data.csv（演題一覧）を下で読み込み<br />
+          2. 演題ごとに1〜5で採点＋コメント<br />
+          3.
+          「評価を確定」で青ロック、最終的に「CSVダウンロード」で提出用ファイルを作成<br /><br />
+          色の意味：<br />
+          <span class="red">赤</span>＝未着手（まだ保存していない） /
+          <span class="yellow">黄</span>＝保存済み未確定 /
+          <span class="blue">青</span>＝確定済み
+        </p>
+      </div>
+
+      <div class="right">
+        <div class="import-block">
+          <label class="import-label">
+            data.csvを読み込む：
+            <input type="file" id="csvInput" accept=".csv,text/csv" />
+          </label>
+          <div id="loadStatus" class="load-status">
+            （まだ読み込まれていません）
+          </div>
+        </div>
+
+        <label class="reviewer-label">
+          審査者名：
+          <input type="text" id="reviewerName" placeholder="例：Reviewer_03" />
+        </label>
+      </div>
+    </header>
+
+    <main>
+      <!-- 左カラム：演題一覧とナビ -->
+      <aside class="paper-list-panel">
+        <div class="nav-block">
+          <button id="prevBtn">&larr; 前へ</button>
+          <span id="currentIndexInfo">0 / 0</span>
+          <button id="nextBtn">次へ &rarr;</button>
+        </div>
+
+        <div class="list-search-block">
+          <input
+            type="text"
+            id="searchBox"
+            placeholder="タイトル・要旨で検索…"
+          />
+        </div>
+
+        <ul id="paperList" class="paper-list">
+          <!-- JavaScriptで挿入 -->
+        </ul>
+      </aside>
+
+      <!-- 右カラム：詳細・採点フォーム -->
+      <section class="detail-panel">
+        <div class="paper-header">
+          <div class="paper-id" id="paperId">ID: -</div>
+          <h2 id="paperTitle">（タイトル）</h2>
+        </div>
+
+        <div class="abstract-block">
+          <h3>抄録 / Abstract</h3>
+          <div class="abstract-text" id="paperAbstract">
+            data.csvを読み込むと、ここに抄録が表示されます。
+          </div>
+        </div>
+
+        <div class="rating-block">
+          <h3>この演題の評価</h3>
+
+          <div class="score-row">
+            <div class="score-label">スコア (1〜5)：</div>
+            <div class="score-buttons">
+              <button class="score-btn" data-score="1">1</button>
+              <button class="score-btn" data-score="2">2</button>
+              <button class="score-btn" data-score="3">3</button>
+              <button class="score-btn" data-score="4">4</button>
+              <button class="score-btn" data-score="5">5</button>
+            </div>
+            <div class="current-score">
+              選択中: <span id="currentScoreDisplay">-</span>
+            </div>
+          </div>
+
+          <div class="comment-row">
+            <label for="commentInput">コメント：</label>
+            <textarea
+              id="commentInput"
+              rows="4"
+              placeholder="例：新規性は高いが、方法の説明が不足していると感じた。"
+            ></textarea>
+          </div>
+
+          <div class="action-row">
+            <div class="action-buttons">
+              <button id="saveBtn" class="primary">評価を保存</button>
+              <button id="finalizeBtn" class="primary finalize">
+                評価を確定
+              </button>
+              <button id="unfinalizeBtn" class="secondary">未確定に戻す</button>
+            </div>
+
+            <div class="action-notes small">
+              「評価を保存」で黄色に、「評価を確定」で青になります。<br />
+              「未確定に戻す」で青→黄に戻せます。<br />
+              修正したら必ずもう一度「評価を保存」してください。
+            </div>
+
+            <span id="saveStatus" class="save-status"></span>
+          </div>
+        </div>
+
+        <div class="stats-block">
+          <h3>あなたの採点状況</h3>
+
+          <!-- スコア分布 -->
+          <div class="stats-row">
+            <div class="stat-item">★1: <span id="count1">0</span></div>
+            <div class="stat-item">★2: <span id="count2">0</span></div>
+            <div class="stat-item">★3: <span id="count3">0</span></div>
+            <div class="stat-item">★4: <span id="count4">0</span></div>
+            <div class="stat-item">★5: <span id="count5">0</span></div>
+          </div>
+
+          <!-- 進捗サマリ（赤/黄/青） -->
+          <div class="progress-row">
+            <div class="stat-item progress-red">
+              未着手: <span id="countNotStarted">0</span>
+            </div>
+            <div class="stat-item progress-yellow">
+              途中: <span id="countInProgress">0</span>
+            </div>
+            <div class="stat-item progress-blue">
+              確定: <span id="countFinalized">0</span>
+            </div>
+          </div>
+
+          <div class="export-row">
+            <button id="downloadBtn" class="secondary">CSVダウンロード</button>
+            <button id="resetBtn" class="danger">全データ初期化</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>
+        ・このアプリはローカルでのみ動作します。サーバー送信なし。<br />
+        ・事務局から配布された data.csv
+        は機密扱いです。GitHub等にアップロードしないでください。<br />
+        ・採点内容はこのPCのブラウザ(localStorage)にのみ保存されます。<br />
+        ・「全データ初期化」でこのPC上の採点履歴（全演題分）を削除できます。
+      </small>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
