@@ -3,9 +3,10 @@ const STORAGE_KEY_REVIEWER = "gakkai_reviewer_name";
 const STORAGE_KEY_REVIEWS  = "gakkai_reviews_v1";
 
 // ====== グローバル状態 ======
-let papers = [];           // [{id, title, abstract}, ...] after CSV upload
+let papers = [];              // [{id, title, abstract}, ...] after CSV upload
 let currentIndex = 0;
 let selectedScore = null;
+let commentPresets = [];      // [{id, text}, ...] from comment.json
 
 // ====== 初期処理 ======
 window.addEventListener("DOMContentLoaded", () => {
@@ -13,14 +14,40 @@ window.addEventListener("DOMContentLoaded", () => {
   const savedReviewer = localStorage.getItem(STORAGE_KEY_REVIEWER) || "";
   document.getElementById("reviewerName").value = savedReviewer;
 
+  // 定型コメントを読み込み
+  loadCommentPresets();
+
+  // イベントハンドラ登録
   setupEventHandlers();
 
   // 初期状態（data.csv未ロード）
-  renderPaperList();     // 空リスト
+  renderPaperList(); // 空
   showPlaceholderPaper();
   updateStatsUI();
   updateLoadStatus("（まだ読み込まれていません）");
 });
+
+// ====== 定型コメントの読み込み ======
+async function loadCommentPresets() {
+  try {
+    const res = await fetch("comment.json");
+    if (!res.ok) throw new Error("failed to load comment.json");
+    commentPresets = await res.json(); // [{id,text}, ...]
+
+    const selectEl = document.getElementById("commentPresetSelect");
+    if (!selectEl) return;
+
+    // 先頭の「（定型コメントを選択）」はそのまま残し、以下を追加
+    commentPresets.forEach(preset => {
+      const opt = document.createElement("option");
+      opt.value = preset.text;
+      opt.textContent = preset.text;
+      selectEl.appendChild(opt);
+    });
+  } catch (err) {
+    console.error("定型コメントの読み込みに失敗しました:", err);
+  }
+}
 
 // ====== イベントハンドラ登録 ======
 function setupEventHandlers() {
@@ -41,7 +68,7 @@ function setupEventHandlers() {
     }
   });
 
-  // 前/次
+  // 前へ / 次へ
   document.getElementById("prevBtn").addEventListener("click", () => {
     if (currentIndex > 0) {
       showPaper(currentIndex - 1);
@@ -60,6 +87,29 @@ function setupEventHandlers() {
       const score = parseInt(btn.dataset.score, 10);
       selectScore(score);
     });
+  });
+
+  // 定型コメント「追加」ボタン
+  const addBtn = document.getElementById("addCommentPresetBtn");
+  const presetSelect = document.getElementById("commentPresetSelect");
+  const commentBox = document.getElementById("commentInput");
+
+  addBtn.addEventListener("click", () => {
+    const presetText = presetSelect.value;
+    if (!presetText) return;
+
+    const current = commentBox.value.trim();
+    if (current === "") {
+      commentBox.value = presetText;
+    } else {
+      commentBox.value = current + " " + presetText;
+    }
+
+    // カーソルを末尾に移動して、そのまま追記しやすくする
+    commentBox.focus();
+    const len = commentBox.value.length;
+    commentBox.selectionStart = len;
+    commentBox.selectionEnd = len;
   });
 
   // 評価を保存
@@ -97,6 +147,9 @@ function setupEventHandlers() {
     updateCurrentScoreDisplay();
     updateStatsUI();
     renderPaperList();
+    if (papers.length > 0) {
+      updateEditLockState(papers[currentIndex].id);
+    }
   });
 
   // 検索
@@ -106,15 +159,39 @@ function setupEventHandlers() {
   });
 }
 
-// ====== CSV読み込み → papers セット ======
+// ====== CSV読み込み（UTF-8/Shift_JIS自動判定）→ papers セット ======
 function handleCSVUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (evt) => {
-    const text = evt.target.result;
-    papers = parseCSV(text); // [{id,title,abstract},...]
+    const buffer = evt.target.result; // ArrayBuffer
+    const bytes = new Uint8Array(buffer);
+
+    // まずUTF-8としてdecodeを試す（fatal: trueで不正ならthrow）
+    let textUtf8 = "";
+    let utf8Ok = true;
+    try {
+      textUtf8 = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (err) {
+      utf8Ok = false;
+    }
+
+    let finalText = "";
+    if (utf8Ok) {
+      finalText = textUtf8;
+    } else {
+      // Shift_JISで再挑戦
+      try {
+        finalText = new TextDecoder("shift_jis").decode(bytes);
+      } catch (err2) {
+        // だめなら最後にutf-8で緩くdecode
+        finalText = new TextDecoder("utf-8").decode(bytes);
+      }
+    }
+
+    papers = parseCSV(finalText); // [{id,title,abstract},...]
 
     if (!papers || papers.length === 0) {
       updateLoadStatus("読み込みに失敗しました（空か形式不正）");
@@ -131,11 +208,13 @@ function handleCSVUpload(e) {
     updateStatsUI();
     updateLoadStatus(`読み込み完了：${papers.length}件`);
   };
-  reader.readAsText(file, "UTF-8");
+
+  // ArrayBufferとして読む（→上で文字コード判定）
+  reader.readAsArrayBuffer(file);
 }
 
 // ====== CSVパーサ ======
-// ヘッダ1行目: id,title,abstract
+// 期待ヘッダ: id,title,abstract
 // ダブルクォート対応（"テキスト,カンマあり"）
 function parseCSV(csvText) {
   const rows = [];
@@ -149,6 +228,7 @@ function parseCSV(csvText) {
 
     if (inQuotes) {
       if (c === '"' && next === '"') {
+        // "" -> " エスケープ
         field += '"';
         i++;
       } else if (c === '"') {
@@ -163,7 +243,7 @@ function parseCSV(csvText) {
         cur.push(field);
         field = "";
       } else if (c === "\r") {
-        // skip CR
+        // CR無視
       } else if (c === "\n") {
         cur.push(field);
         rows.push(cur);
@@ -175,7 +255,7 @@ function parseCSV(csvText) {
     }
   }
 
-  // 最終行をpush
+  // 最終行
   if (field.length > 0 || cur.length > 0) {
     cur.push(field);
     rows.push(cur);
@@ -201,7 +281,8 @@ function parseCSV(csvText) {
 
 // ヘッダー右側の読み込み状況
 function updateLoadStatus(msg) {
-  document.getElementById("loadStatus").textContent = msg;
+  const el = document.getElementById("loadStatus");
+  if (el) el.textContent = msg;
 }
 
 // ====== localStorageでのレビュー管理 ======
@@ -225,8 +306,14 @@ function getMyReviewFor(paperId) {
   return all.find(r => r.reviewer === reviewer && r.paper_id === paperId) || null;
 }
 
-// ====== スコア操作UI ======
+// ====== スコア選択UI ======
 function selectScore(score) {
+  // ロック中なら反応しない（安全側）
+  const currentPaper = papers[currentIndex];
+  if (currentPaper && isPaperLocked(currentPaper.id)) {
+    return;
+  }
+
   selectedScore = score;
   updateScoreButtonsUI();
   updateCurrentScoreDisplay();
@@ -244,24 +331,28 @@ function updateCurrentScoreDisplay() {
     selectedScore ? selectedScore : "-";
 }
 
-// ====== 演題表示 ======
+// ====== 表示（プレースホルダ） ======
 function showPlaceholderPaper() {
   document.getElementById("paperId").textContent = "ID: -";
   document.getElementById("paperTitle").textContent = "（タイトル）";
   document.getElementById("paperAbstract").textContent =
     "data.csvを読み込むと、ここに抄録が表示されます。";
 
-  document.getElementById("currentIndexInfo").textContent =
-    `0 / 0`;
+  document.getElementById("currentIndexInfo").textContent = `0 / 0`;
 
   selectedScore = null;
   document.getElementById("commentInput").value = "";
   updateScoreButtonsUI();
   updateCurrentScoreDisplay();
   document.getElementById("saveStatus").textContent = "";
+
   highlightActivePaper();
+
+  // ロック状態更新（何もないのでunlock扱い）
+  updateEditLockState(null);
 }
 
+// ====== 演題表示 ======
 function showPaper(index) {
   if (!papers || papers.length === 0) {
     showPlaceholderPaper();
@@ -278,7 +369,7 @@ function showPaper(index) {
   document.getElementById("currentIndexInfo").textContent =
     (index + 1) + " / " + papers.length;
 
-  // 復元：この審査者のこの演題の既存レビュー
+  // この審査者のこの演題の既存レビューを復元
   const myReview = getMyReviewFor(p.id);
   if (myReview) {
     selectedScore = myReview.score;
@@ -294,61 +385,8 @@ function showPaper(index) {
 
   highlightActivePaper();
 
-  // ←★ここを追加：確定済みならロック、未確定なら編集OKにする
+  // 確定済みなら編集ロック、未確定なら編集可
   updateEditLockState(p.id);
-}
-
-// ====== この演題が確定済みなら編集不可にする ======
-function updateEditLockState(paperId) {
-  const reviewer = document.getElementById("reviewerName").value.trim();
-  const myReview = getMyReviewFor(paperId);
-
-  const isLocked = !!(myReview && myReview.finalized === true);
-
-  // スコアボタン
-  document.querySelectorAll(".score-btn").forEach(btn => {
-    btn.disabled = isLocked;
-    btn.style.opacity = isLocked ? "0.4" : "";
-    btn.style.cursor  = isLocked ? "not-allowed" : "pointer";
-  });
-
-  // コメント欄
-  const commentBox = document.getElementById("commentInput");
-  commentBox.disabled = isLocked;
-  commentBox.style.backgroundColor = isLocked ? "#eee" : "";
-  commentBox.style.opacity = isLocked ? "0.6" : "";
-  commentBox.style.cursor = isLocked ? "not-allowed" : "text";
-
-  // 「評価を保存」はロック中は押せない
-  const saveBtn = document.getElementById("saveBtn");
-  saveBtn.disabled = isLocked;
-  saveBtn.style.opacity = isLocked ? "0.4" : "";
-  saveBtn.style.cursor  = isLocked ? "not-allowed" : "pointer";
-
-  // 「評価を確定」はロック後は押しても意味がないので無効化しておく
-  const finalizeBtn = document.getElementById("finalizeBtn");
-  finalizeBtn.disabled = isLocked;
-  finalizeBtn.style.opacity = isLocked ? "0.4" : "";
-  finalizeBtn.style.cursor  = isLocked ? "not-allowed" : "pointer";
-
-  // 「未確定に戻す」はロック中だけ有効にする（逆に、ロックされていないときは無効でもOK）
-  const unfinalizeBtn = document.getElementById("unfinalizeBtn");
-  const canUnfinalize = isLocked;
-  unfinalizeBtn.disabled = !canUnfinalize;
-  unfinalizeBtn.style.opacity = canUnfinalize ? "" : "0.4";
-  unfinalizeBtn.style.cursor  = canUnfinalize ? "pointer" : "not-allowed";
-
-  // ステータス表示をわかりやすく
-  const statusEl = document.getElementById("saveStatus");
-  if (isLocked) {
-    statusEl.textContent = "この演題は確定済み（編集ロック中）🔒";
-  } else {
-    // 直前のメッセージはそのまま維持したいので、ここで無理に消さない
-    // ただし、空なら案内を少し出す
-    if (!statusEl.textContent) {
-      statusEl.textContent = "編集中（未確定）";
-    }
-  }
 }
 
 // ====== レビュー保存・確定・未確定 ======
@@ -367,8 +405,15 @@ function saveCurrentReview() {
     return;
   }
 
-  const comment = document.getElementById("commentInput").value.trim();
   const currentPaper = papers[currentIndex];
+
+  // ロック中なら保存禁止
+  if (isPaperLocked(currentPaper.id)) {
+    alert("この演題は確定済みのため編集できません。まず『未確定に戻す』を押してください。");
+    return;
+  }
+
+  const comment = document.getElementById("commentInput").value.trim();
   const ts = new Date().toISOString();
 
   let all = loadAllReviews();
@@ -377,7 +422,7 @@ function saveCurrentReview() {
   );
 
   if (idx >= 0) {
-    // finalizedは保持
+    // finalizedは維持
     all[idx] = {
       ...all[idx],
       score: selectedScore,
@@ -401,6 +446,7 @@ function saveCurrentReview() {
 
   updateStatsUI();
   renderPaperList();
+  updateEditLockState(currentPaper.id);
 }
 
 function finalizeCurrentReview() {
@@ -435,7 +481,6 @@ function finalizeCurrentReview() {
   updateStatsUI();
   renderPaperList();
 
-  // ★UIロック反映
   updateEditLockState(currentPaper.id);
 }
 
@@ -471,8 +516,72 @@ function unfinalizeCurrentReview() {
   updateStatsUI();
   renderPaperList();
 
-  // ★UIロック反映（ロック解除されるので編集できるようになる）
   updateEditLockState(currentPaper.id);
+}
+
+// ====== ロック判定とUI制御 ======
+function isPaperLocked(paperId) {
+  if (!paperId) return false;
+  const myReview = getMyReviewFor(paperId);
+  return !!(myReview && myReview.finalized === true);
+}
+
+// 確定済みなら編集不可、未確定なら編集可にする
+function updateEditLockState(paperId) {
+  const locked = isPaperLocked(paperId);
+
+  // スコアボタン
+  document.querySelectorAll(".score-btn").forEach(btn => {
+    btn.disabled = locked;
+    btn.style.opacity = locked ? "0.4" : "";
+    btn.style.cursor  = locked ? "not-allowed" : "pointer";
+  });
+
+  // コメント欄
+  const commentBox = document.getElementById("commentInput");
+  commentBox.disabled = locked;
+  commentBox.style.backgroundColor = locked ? "#eee" : "";
+  commentBox.style.opacity = locked ? "0.6" : "";
+  commentBox.style.cursor = locked ? "not-allowed" : "text";
+
+  // 定型コメントのUI（プリセット）
+  const addPresetBtn = document.getElementById("addCommentPresetBtn");
+  const presetSelect = document.getElementById("commentPresetSelect");
+  addPresetBtn.disabled = locked;
+  presetSelect.disabled = locked;
+  addPresetBtn.style.opacity = locked ? "0.4" : "";
+  presetSelect.style.opacity = locked ? "0.6" : "";
+  addPresetBtn.style.cursor  = locked ? "not-allowed" : "pointer";
+  presetSelect.style.cursor  = locked ? "not-allowed" : "pointer";
+
+  // 「評価を保存」
+  const saveBtn = document.getElementById("saveBtn");
+  saveBtn.disabled = locked;
+  saveBtn.style.opacity = locked ? "0.4" : "";
+  saveBtn.style.cursor  = locked ? "not-allowed" : "pointer";
+
+  // 「評価を確定」ボタンはロック済みなら押せない
+  const finalizeBtn = document.getElementById("finalizeBtn");
+  finalizeBtn.disabled = locked;
+  finalizeBtn.style.opacity = locked ? "0.4" : "";
+  finalizeBtn.style.cursor  = locked ? "not-allowed" : "pointer";
+
+  // 「未確定に戻す」はロック中だけ押せる（ロック解除用）
+  const unfinalizeBtn = document.getElementById("unfinalizeBtn");
+  const canUnfinalize = locked;
+  unfinalizeBtn.disabled = !canUnfinalize;
+  unfinalizeBtn.style.opacity = canUnfinalize ? "" : "0.4";
+  unfinalizeBtn.style.cursor  = canUnfinalize ? "pointer" : "not-allowed";
+
+  // ステータス表示
+  const statusEl = document.getElementById("saveStatus");
+  if (locked) {
+    statusEl.textContent = "この演題は確定済み（編集ロック中）🔒";
+  } else {
+    if (!statusEl.textContent) {
+      statusEl.textContent = "編集中（未確定）";
+    }
+  }
 }
 
 // ====== リスト表示と検索 ======
@@ -505,6 +614,8 @@ function renderPaperList(filteredIndexes = null) {
     if (status === "yellow") li.classList.add("state-yellow");
     if (status === "blue") li.classList.add("state-blue");
 
+    // タイトルなどをそのままinnerHTMLに入れているが、
+    // 将来的にXSS対策する場合はescapeHTML()を通すことを推奨
     li.innerHTML = `
       <div class="pid">ID: ${p.id}</div>
       <div class="ptitle">${p.title}</div>
@@ -519,7 +630,7 @@ function renderPaperList(filteredIndexes = null) {
 
   highlightActivePaper();
 
-  // リストが空ならインデックス表示も0/0に
+  // リストが空ならインデックス表示も0/0
   const info = document.getElementById("currentIndexInfo");
   if (papers.length === 0) {
     info.textContent = "0 / 0";
@@ -589,7 +700,15 @@ function updateStatsUI() {
   if (fnEl) fnEl.textContent = finalized;
 }
 
-// ====== 自分の採点結果をCSVでダウンロード ======
+// ====== CSVダウンロード（提出用） ======
+function sanitizeCSVValue(value) {
+  // CSVインジェクション対策: 先頭が = + - @ の場合は'を付ける
+  if (typeof value === "string" && /^[=+\-@]/.test(value)) {
+    return "'" + value;
+  }
+  return value;
+}
+
 function downloadCSV() {
   const reviewer = document.getElementById("reviewerName").value.trim();
   if (!reviewer) {
@@ -597,8 +716,8 @@ function downloadCSV() {
     return;
   }
 
-  const all = loadAllReviews().filter(r => r.reviewer === reviewer);
-  if (all.length === 0) {
+  const allMine = loadAllReviews().filter(r => r.reviewer === reviewer);
+  if (allMine.length === 0) {
     alert("まだこの審査者の保存データがありません。");
     return;
   }
@@ -606,13 +725,13 @@ function downloadCSV() {
   const headers = ["reviewer","paper_id","score","comment","timestamp","finalized"];
   const lines = [headers.join(",")];
 
-  all.forEach(r => {
+  allMine.forEach(r => {
     const row = [
-      r.reviewer,
-      r.paper_id,
-      r.score,
-      (r.comment || "").replace(/"/g,'""'),
-      r.timestamp,
+      sanitizeCSVValue(r.reviewer),
+      sanitizeCSVValue(r.paper_id),
+      sanitizeCSVValue(String(r.score)),
+      sanitizeCSVValue((r.comment || "").replace(/"/g,'""')),
+      sanitizeCSVValue(r.timestamp),
       r.finalized ? "true" : "false"
     ].map(v => `"${v}"`);
     lines.push(row.join(","));
@@ -620,7 +739,7 @@ function downloadCSV() {
 
   const csvContent = lines.join("\r\n");
 
-  // Excel向けにBOM付きUTF-8
+  // Excelの文字化け対策でUTF-8 BOM付き
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
 

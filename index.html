@@ -100,6 +100,25 @@
               rows="4"
               placeholder="例：新規性は高いが、方法の説明が不足していると感じた。"
             ></textarea>
+            <!-- ▼ 定型文アシスタント -->
+            <label for="comment-assist-row">定型文挿入</label>
+            <div class="comment-assist-row">
+              <select id="commentPresetSelect">
+                <option value="">（定型コメントを選択）</option>
+                <!-- script.js側でcomment.jsonから埋める -->
+              </select>
+              <button
+                id="addCommentPresetBtn"
+                type="button"
+                class="secondary small-btn"
+              >
+                追加
+              </button>
+            </div>
+            <div class="comment-assist-hint small-hint">
+              定型コメントを選んで「追加」を押すと、上のコメント欄の末尾に追記されます。自由に編集できます。
+            </div>
+            <!-- ▲ 定型文アシスタント -->
           </div>
 
           <div class="action-row">
