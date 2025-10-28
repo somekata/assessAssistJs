@@ -450,9 +450,11 @@ main {
 /* フッター */
 footer {
   padding: 8px 16px 24px;
+  margin-left: 200px;
   font-size: 0.7rem;
   color: #666;
-  text-align: center;
+  text-align: left;
+  max-width: 800px;
 }
 /* CSVインポートUI */
 .import-block {
