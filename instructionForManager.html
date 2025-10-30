@@ -77,7 +77,10 @@
       <ol>
         <li>
           <strong>GitHub Pages：</strong>
-          https://somekata.github.io/assessAssistJs/ にアプリを公開
+          <a href="https://somekata.github.io/assessAssistJs/"
+            >学会審査アシスタント</a
+          >
+          にアプリを公開
         </li>
         <li>
           <strong>事務局：</strong>
@@ -91,7 +94,18 @@
           <strong>審査員：</strong> 採点後「CSVダウンロード」で review_XXX.csv
           を提出
         </li>
-        <li><strong>事務局：</strong> 各review_*.csvを集計</li>
+        <li>
+          <strong>事務局：</strong
+          ><a href="https://somekata.github.io/assessManage/"
+            >採点結果 集計ツール</a
+          >で全てのreview_*.csvを読み込み（複数のファイルをいっぺんに読み込む）、集計する。結果をsummary.csvとしてダウンロードする。reviewer_summary.csvは必須ではないが、必要であればダウンロードする。
+        </li>
+        <li>
+          <strong>事務局：</strong
+          ><a href="https://somekata.github.io/assessManage/view.html"
+            >採点結果 閲覧ツール</a
+          >でsummary.csvを読み込み、結果を確認する。必要に応じて審査者に使用してもらう。
+        </li>
       </ol>
 
       <div class="box warn">
@@ -134,14 +148,18 @@
           <li>
             ブラウザで
             <a href="https://somekata.github.io/assessAssistJs/" target="_blank"
-              >https://somekata.github.io/assessAssistJs/</a
+              >学会審査アシスタント</a
             >
             を開く
           </li>
           <li>
             右上の「data.csvを読み込む」からデスクトップの data.csv を選択
           </li>
-          <li>データが表示されたら、審査者名を入力して採点開始</li>
+          <li>データが表示されたら、審査者名を入力して採点開始*</li>
+          <small
+            >*注：採点の入力を開始する前に、審査者名を入力してもらう。</small
+          >
+          <li>採点が終わったら、CSVダウンロードで</li>
         </ol>
       </div>
 
@@ -163,7 +181,9 @@
       </p>
 
       <div class="warn box">
-        審査員名と個人を直接結びつけないように配慮してください（ID制を推奨）。
+        審査員名を匿名にする場合：<br />
+        審査員名をReview_03のようにして集めます。<br />
+        同名にならないよう注意してください。
       </div>
 
       <h2>6. よくあるトラブル</h2>
@@ -175,6 +195,54 @@
         <li>
           <strong>data.csvが読み込めない：</strong>
           改行・カンマ・クォートの整形ミス → VSCodeで確認
+        </li>
+        <li>
+          <strong>以前の採点結果が消えた：</strong>
+          全データ初期化を押さない限り、ローカルストレージに保存されているはずですが、読み込んだdata.csvが異なっていたり、審査者名が変わっていると、表示錠は採点結果が失われたように見えます。<br />
+          したがって、できるだけ一気に採点をしてもらう方が無難です。<br />
+          もしくは、いったん中断するときにはCSVでダウンロードをしておいてもらうと後で役に立つ場合があります。
+        </li>
+        <li>
+          <strong>以前の採点結果が残っている：</strong>
+          ローカルストレージに保存されたデータが呼び出されいる。<br />
+          全データ初期化をして以前のデータを削除してもらう。
+        </li>
+      </ul>
+      <h2>7. リンク</h2>
+      <p>操作に関連するリンクをまとめて掲載します。</p>
+      <ul>
+        <li>
+          <a href="https://somekata.github.io/assessAssistJs/"
+            >学会審査アシスタント</a
+          >：審査者が使用します。
+        </li>
+        <li>
+          <a
+            href="https://somekata.github.io/assessAssistJs/instructionForReviewer.html"
+            >審査員用マニュアル</a
+          >：審査者向けマニュアルです。
+        </li>
+        <li>
+          <a
+            href="https://somekata.github.io/assessAssistJs/instructionForManager.html"
+            >事務局・管理者用マニュアル</a
+          >：このマニュアルです。
+        </li>
+        <li>
+          <a href="https://somekata.github.io/assessManage/"
+            >採点結果 集計ツール</a
+          >：事務局担当者が使用します。
+        </li>
+        <li>
+          <a href="https://somekata.github.io/assessManage/view.html"
+            >採点結果 閲覧ツール</a
+          >：事務担当が結果を確認するためのツールです。必要に応じて審査者も使用します。
+        </li>
+        <li>
+          <a href="https://somekata.github.io/assessManage/instruction.html"
+            >集計・閲覧マニュアル</a
+          >：採点結果集計ツールおよび採点結果
+          閲覧ツールの使い方を説明しています。
         </li>
       </ul>
     </main>
