@@ -112,20 +112,54 @@ function setupEventHandlers() {
     commentBox.selectionEnd = len;
   });
 
-  // 評価を保存
+// === ボタンの有効・無効制御 ===
+function updateActionButtons(state) {
+  const saveBtn = document.getElementById("saveBtn");
+  const finalizeBtn = document.getElementById("finalizeBtn");
+  const unfinalizeBtn = document.getElementById("unfinalizeBtn");
+
+  if (state === "initial") {        // 開いた直後・未保存
+    saveBtn.disabled = false;
+    finalizeBtn.disabled = true;
+    unfinalizeBtn.disabled = true;
+  } else if (state === "saved") {   // 保存済み
+    saveBtn.disabled = false;
+    finalizeBtn.disabled = false;
+    unfinalizeBtn.disabled = true;
+  } else if (state === "finalized") { // 確定済み
+    saveBtn.disabled = true;
+    finalizeBtn.disabled = true;
+    unfinalizeBtn.disabled = false;
+  }
+}
+
+  // 保存ボタン
   document.getElementById("saveBtn").addEventListener("click", () => {
     saveCurrentReview();
+    updateActionButtons("saved");
   });
 
-  // 評価を確定
+  // 確定ボタン
   document.getElementById("finalizeBtn").addEventListener("click", () => {
     finalizeCurrentReview();
+    updateActionButtons("finalized");
   });
 
-  // 未確定に戻す
+  // 未確定ボタン
   document.getElementById("unfinalizeBtn").addEventListener("click", () => {
     unfinalizeCurrentReview();
+    updateActionButtons("initial");
   });
+
+  // 各演題を開くたびに現在の状態を反映
+  function showPaper(index) {
+    // 既存の処理...
+    const review = getReviewByPaperId(paper.id);
+    if (!review) updateActionButtons("initial");
+    else if (review.finalized) updateActionButtons("finalized");
+    else updateActionButtons("saved");
+  }
+
 
   // CSVダウンロード（採点結果）
   document.getElementById("downloadBtn").addEventListener("click", () => {
