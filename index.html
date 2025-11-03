@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>学会審査アシスタント</title>
-    <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="topbutton.css" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/topbutton.css" />
   </head>
   <body>
     <header>
@@ -66,8 +66,9 @@
       <!-- 右カラム：詳細・採点フォーム -->
       <section class="detail-panel">
         <div class="paper-header">
-          <div class="paper-id" id="paperId">ID: -</div>
-          <h2 id="paperTitle">（タイトル）</h2>
+          <span class="paper-id" id="paperId"></span>
+          <span id="paperSection" class="paper-section"></span>
+          <h2 id="paperTitle"></h2>
         </div>
 
         <div class="abstract-block">
@@ -88,6 +89,11 @@
               <button class="score-btn" data-score="3">3</button>
               <button class="score-btn" data-score="4">4</button>
               <button class="score-btn" data-score="5">5</button>
+              <!--採点しない機能は正常に作動しないため保留
+              <button class="score-btn score-btn-no" data-score="0">
+                採点しない
+              </button>
+              -->
             </div>
             <div class="current-score">
               選択中: <span id="currentScoreDisplay">-</span>
@@ -103,7 +109,7 @@
             ></textarea>
             <!-- ▼ 定型文アシスタント -->
             <label for="comment-assist-row">定型文挿入</label>
-            <div class="comment-assist-row">
+            <div id="comment-assist-row">
               <select id="commentPresetSelect">
                 <option value="">（定型コメントを選択）</option>
                 <!-- script.js側でcomment.jsonから埋める -->
@@ -134,10 +140,9 @@
             <div class="action-notes small">
               「評価を保存」で黄色に、「評価を確定」で青になります。<br />
               「未確定に戻す」で青→黄に戻せます。<br />
-              修正したら必ずもう一度「評価を保存」してください。
+              修正したら必ずもう一度「評価を保存」してください。<br /><br />
+              <span id="saveStatus" class="save-status"></span>
             </div>
-
-            <span id="saveStatus" class="save-status"></span>
           </div>
         </div>
 
@@ -151,6 +156,11 @@
             <div class="stat-item">★3: <span id="count3">0</span></div>
             <div class="stat-item">★4: <span id="count4">0</span></div>
             <div class="stat-item">★5: <span id="count5">0</span></div>
+            <!--採点しない機能は正常に作動しないため保留
+            <div class="stat-item">
+              採点しない: <span id="countNone">0</span>
+            </div>
+            -->
           </div>
 
           <!-- 進捗サマリ（赤/黄/青） -->
@@ -236,8 +246,16 @@
       </small>
     </footer>
 
-    <script src="script.js"></script>
+    <!--主なscript-->
+    <script src="js/storage.js" defer></script>
+    <script src="js/csv.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <script src="js/reviewLogic.js" defer></script>
+    <script src="js/comments.js" defer></script>
+    <script src="js/main.js" defer></script>
+
+    <!--TOP button-->
     <div id="scroll-progress-pie"></div>
-    <script src="topbutton.js"></script>
+    <script src="js/topbutton.js" defer></script>
   </body>
 </html>
