@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>使い方とサンプル</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/topbutton.css" />
+  </head>
+  <body>
+    <!-- ヒーローヘッダー：既存 header スタイルを流用 -->
+    <header>
+      <div>
+        <h1>📘 使い方とサンプル</h1>
+        <p class="small">
+          このページでは、審査員・管理者向けマニュアルとサンプルCSV、関連ツールへの導線をまとめています。
+        </p>
+        <p>
+          <a class="secondary" href="index.html">ツールに戻る</a>
+        </p>
+      </div>
+    </header>
+
+    <main style="display: block; padding: 16px 0">
+      <!-- 審査員向け -->
+      <section class="manual">
+        <h2 style="margin: 0 0 8px; font-size: 1rem">審査員用マニュアル</h2>
+        <p class="small-hint">
+          採点の流れ、スコア確定ルール、コメント記入のコツを収録。
+        </p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px">
+          <a class="primary" href="instructionForReviewer.html" target="_blank"
+            >マニュアルを開く</a
+          >
+        </div>
+      </section>
+
+      <!-- 管理者向け -->
+      <section class="manual">
+        <h2 style="margin: 0 0 8px; font-size: 1rem">管理者用マニュアル</h2>
+        <p class="small-hint">
+          CSV項目の説明、配布・回収手順、データ統合・バックアップ手順を収録。
+        </p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px">
+          <a class="primary" href="instructionForManager.html" target="_blank"
+            >マニュアルを開く</a
+          >
+        </div>
+      </section>
+
+      <!-- サンプルCSV -->
+      <section class="manual">
+        <h2 style="margin: 0 0 8px; font-size: 1rem">sample.csv</h2>
+        <p class="small-hint">テンプレートとしてそのまま利用できます。</p>
+        <div
+          style="display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px"
+        >
+          <a class="primary" href="sample50.csv" download
+            >sample50.csv をダウンロード</a
+          >
+        </div>
+        <ul style="margin: 8px 0 0; padding-left: 18px; font-size: 0.85rem">
+          <li>
+            Excelで開くと文字化けする場合は、<strong>UTF-8</strong>
+            でインポート。
+          </li>
+          <li>メモ帳/VSCodeなどのテキストエディタでの編集が安全。</li>
+          <li>不正なカンマや改行がないかを事前チェック。</li>
+        </ul>
+      </section>
+
+      <!-- 関連ツール -->
+      <section class="manual">
+        <h2 style="margin: 0 0 8px; font-size: 1rem">関連ツール</h2>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <a
+            class="secondary"
+            href="https://somekata.github.io/assessManage/"
+            target="_blank"
+            >採点結果 集計ツール</a
+          >
+          <a
+            class="secondary"
+            href="https://somekata.github.io/assessManage/view.html"
+            target="_blank"
+            >採点結果 閲覧ツール</a
+          >
+          <a
+            class="secondary"
+            href="https://somekata.github.io/assessManage/instruction.html"
+            target="_blank"
+            >集計・閲覧マニュアル</a
+          >
+        </div>
+      </section>
+    </main>
+
+    <!--TOPボタン（CSSで矢印とTOP表示を中央配置済み）-->
+    <div id="scroll-progress-pie"></div>
+    <script src="js/topbutton.js" defer></script>
+
+    <footer>最終更新：<span id="lastUpdated"></span></footer>
+    <script>
+      // ちょい足し：更新日の表示（任意）
+      document.getElementById("lastUpdated").textContent =
+        new Date().toLocaleDateString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+    </script>
+  </body>
+</html>
