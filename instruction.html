@@ -22,6 +22,21 @@
     </header>
 
     <main style="display: block; padding: 16px 0">
+      <!-- 概要 -->
+      <section class="manual">
+        <h1 style="margin: 0 0 8px; font-size: 1.2rem">本ツールの概要</h1>
+        <ul style="margin: 8px 0 0; padding-left: 18px; font-size: 0.85rem">
+          <li>このアプリはローカルでのみ動作します。サーバー送信なし。</li>
+          <li>
+            事務局から配布された data.csv
+            は機密扱いです。GitHub等にアップロードしないでください。
+          </li>
+          <li>採点内容はこのPCのブラウザ(localStorage)にのみ保存されます。</li>
+          <li>
+            「全データ初期化」でこのPC上の採点履歴（全演題分）を削除できます。
+          </li>
+        </ul>
+      </section>
       <!-- 審査員向け -->
       <section class="manual">
         <h2 style="margin: 0 0 8px; font-size: 1rem">審査員用マニュアル</h2>
@@ -99,15 +114,13 @@
     <div id="scroll-progress-pie"></div>
     <script src="js/topbutton.js" defer></script>
 
-    <footer>最終更新：<span id="lastUpdated"></span></footer>
-    <script>
-      // ちょい足し：更新日の表示（任意）
-      document.getElementById("lastUpdated").textContent =
-        new Date().toLocaleDateString("ja-JP", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        });
-    </script>
+    <footer>
+      <ul>
+        <li>
+          このアプリは学会賞の事前審査の採点を支援するツールとして、ChatGPTを利用して作成しました。
+        </li>
+      </ul>
+      <div class="copyright">© 2025 Yukihiro Kaneko. All rights reserved.</div>
+    </footer>
   </body>
 </html>
