@@ -242,6 +242,10 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
   <span class="stat-chip"><span class="label">★3</span><span class="val" id="st3">0</span></span>
   <span class="stat-chip"><span class="label">★4</span><span class="val" id="st4">0</span></span>
   <span class="stat-chip"><span class="label">★5</span><span class="val" id="st5">0</span></span>
+  <span>｜</span>
+  <span class="stat-chip"><span class="label" style="color:var(--basic-color);">基礎</span><span class="val" id="stBasic">0</span></span>
+  <span class="stat-chip"><span class="label" style="color:var(--clinical-color);">臨床</span><span class="val" id="stClinical">0</span></span>
+  <span class="stat-chip"><span class="label">未分類</span><span class="val" id="stUnset">0</span></span>
   <span id="progressFrac">0 / 0</span>
 </div>
 
@@ -337,6 +341,9 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
       <div class="sum-card"><div class="sum-num" id="sum3">0</div><div class="sum-lbl">★3</div></div>
       <div class="sum-card"><div class="sum-num" id="sum4">0</div><div class="sum-lbl">★4</div></div>
       <div class="sum-card"><div class="sum-num" id="sum5">0</div><div class="sum-lbl">★5</div></div>
+      <div class="sum-card" style="border-top:3px solid var(--basic-color);"><div class="sum-num" style="color:var(--basic-color);" id="sumBasic">0</div><div class="sum-lbl">基礎</div></div>
+      <div class="sum-card" style="border-top:3px solid var(--clinical-color);"><div class="sum-num" style="color:var(--clinical-color);" id="sumClinical">0</div><div class="sum-lbl">臨床</div></div>
+      <div class="sum-card"><div class="sum-num" id="sumUnset">0</div><div class="sum-lbl">未分類</div></div>
     </div>
     <div class="bulk-bar">
       <strong>一括操作：</strong>
@@ -344,7 +351,12 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
       <select id="bulkCatSel"><option value="basic">基礎</option><option value="clinical">臨床</option><option value="">未分類</option></select>
       <button class="bulk-apply" onclick="applyBulkCat()">区分適用</button>
       <span style="color:var(--border);margin:0 .2rem;">｜</span>
-      <button class="bulk-apply" style="background:var(--success);" onclick="applyBulkConfirm()">✅ 一括確定</button>
+      <select id="bulkStatusSel">
+        <option value="todo">途中</option>
+        <option value="confirmed">確定</option>
+        <option value="untouched">未確定</option>
+      </select>
+      <button class="bulk-apply" style="background:var(--success);" onclick="applyBulkStatus()">ステータス適用</button>
       <span style="color:var(--muted);font-size:.75rem;" id="bulkCount">（0件選択中）</span>
     </div>
     <div class="list-toolbar">
@@ -776,14 +788,21 @@ function saveTemplates() { localStorage.setItem(LS_TPL, JSON.stringify(templates
 function updateStatus() {
   const cnt = { untouched:0, todo:0, confirmed:0 };
   const stars = {1:0,2:0,3:0,4:0,5:0};
+  const cat = { basic:0, clinical:0, unset:0 };
   abstracts.forEach(a => {
     cnt[a.status] = (cnt[a.status] || 0) + 1;
     if (a.score) stars[a.score]++;
+    if (a.category === 'basic') cat.basic++;
+    else if (a.category === 'clinical') cat.clinical++;
+    else cat.unset++;
   });
   document.getElementById('stUntouched').textContent = cnt.untouched || 0;
   document.getElementById('stTodo').textContent = cnt.todo || 0;
   document.getElementById('stConfirmed').textContent = cnt.confirmed || 0;
   for (let i=1;i<=5;i++) document.getElementById('st'+i).textContent = stars[i];
+  document.getElementById('stBasic').textContent = cat.basic;
+  document.getElementById('stClinical').textContent = cat.clinical;
+  document.getElementById('stUnset').textContent = cat.unset;
   document.getElementById('progressFrac').textContent =
     (cnt.confirmed || 0) + ' / ' + abstracts.length + ' 確定';
 
@@ -792,6 +811,9 @@ function updateStatus() {
   document.getElementById('sumTodo').textContent = cnt.todo || 0;
   document.getElementById('sumConfirmed').textContent = cnt.confirmed || 0;
   for (let i=1;i<=5;i++) document.getElementById('sum'+i).textContent = stars[i];
+  document.getElementById('sumBasic').textContent = cat.basic;
+  document.getElementById('sumClinical').textContent = cat.clinical;
+  document.getElementById('sumUnset').textContent = cat.unset;
 }
 
 // ===== LIST =====
@@ -869,18 +891,18 @@ function applyBulkCat() {
   renderList();
 }
 
-function applyBulkConfirm() {
+function applyBulkStatus() {
   const checked = document.querySelectorAll('.row-check:checked');
   if (checked.length === 0) { alert('演題を選択してください。'); return; }
-  if (!confirm(checked.length + '件の演題を一括確定してもよいですか？')) return;
+  const status = document.getElementById('bulkStatusSel').value;
+  const label = status === 'confirmed' ? '確定' : status === 'todo' ? '途中' : '未確定';
+  if (!confirm(checked.length + '件の演題を「' + label + '」に変更してもよいですか？')) return;
   checked.forEach(c => {
-    const i = parseInt(c.dataset.i);
-    abstracts[i].status = 'confirmed';
+    abstracts[parseInt(c.dataset.i)].status = status;
   });
   saveData();
   renderList();
   updateStatus();
-  // 現在表示中の演題が含まれていれば再描画
   renderReview();
 }
 
