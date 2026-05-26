@@ -261,6 +261,26 @@ main {
 }
 .notes strong { color: var(--ink); }
 
+.warn-box {
+  background: #fffbea;
+  border: 1px solid #f0d060;
+  border-left: 4px solid #e0a820;
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.2rem;
+  font-size: .8rem;
+  color: #5a4a00;
+  line-height: 1.9;
+  margin-top: .8rem;
+}
+.warn-box strong { color: #3a2e00; }
+.warn-box .warn-title { font-size: .85rem; font-weight: 700; margin-bottom: .5rem; color: #3a2e00; }
+.warn-table { width: 100%; border-collapse: collapse; margin-top: .5rem; font-size: .78rem; }
+.warn-table th { background: #f5e080; padding: .3rem .6rem; text-align: left; font-weight: 700; border: 1px solid #e0c840; }
+.warn-table td { padding: .3rem .6rem; border: 1px solid #e8d870; vertical-align: top; }
+.warn-table tr:nth-child(even) td { background: #fffdf0; }
+.ok { color: #2d7a4f; font-weight: 700; }
+.ng { color: #c0392b; font-weight: 700; }
+
 /* ── FOOTER ── */
 footer {
   background: #2c2c2c;
@@ -425,10 +445,40 @@ footer {
     </div>
 
     <div class="notes">
-      <strong>⚠️ 注意事項</strong><br>
+      <strong>⚠️ 基本的な注意事項</strong><br>
       ・すべての処理はブラウザ内で完結します。データが外部に送信されることはありません。<br>
-      ・査読ツールのデータはブラウザの localStorage に保存されます。ブラウザのキャッシュ削除・異なるブラウザでは引き継がれません。長期保存にはJSONエクスポートをご利用ください。<br>
-      ・3つのファイル（index.html・abstract_review.html・abstract_aggregate.html）は同じフォルダに置いてください。
+      ・3つのファイル（index.html・abstract_review.html・abstract_aggregate.html）は同じフォルダに置いてください。<br>
+      ・シークレット／プライベートモードでは localStorage が使えないため、データが保存されません。通常モードでご利用ください。<br>
+      ・評価者ごとに別のPC、または別のブラウザを使用することを推奨します。同一ブラウザを複数人で共用すると、データが上書きされます。
+    </div>
+
+    <div class="warn-box">
+      <div class="warn-title">🔔 途中再開・データ保存の仕組みと注意点</div>
+
+      <strong>localStorageに保存されるタイミング</strong>
+      <table class="warn-table" style="margin-bottom:.8rem;">
+        <tr><th>操作</th><th>保存内容</th></tr>
+        <tr><td>PDF読み込み完了（新規）</td><td>全演題の初期データ（スコアなし）</td></tr>
+        <tr><td>★評価・区分・確定・途中 を操作するたび</td><td>演題データ（即時）</td></tr>
+        <tr><td>コメント入力（0.6秒後）</td><td>演題データ</td></tr>
+        <tr><td>JSONインポート完了時</td><td>インポートデータで上書き</td></tr>
+        <tr><td>評価者名を入力するたび</td><td>評価者名（別キー）</td></tr>
+      </table>
+
+      <strong>途中再開の正しい手順</strong><br>
+      PDFを読み込むと、まずlocalStorageにデータが残っていないか確認します。残っている場合は「復元しますか？」と聞いてきます。<br><br>
+      <span class="ok">✅ OK</span>　「復元しますか？」→ <strong>「OK」</strong> を押す → 前回の評価データが復元されます<br>
+      <span class="ng">❌ NG</span>　「復元しますか？」→ <strong>「キャンセル」</strong> を押す → <strong>前回の評価データが消えてPDFが新規読み込みされます</strong><br><br>
+
+      <strong>シナリオ別の推奨手順</strong>
+      <table class="warn-table">
+        <tr><th>状況</th><th>手順</th></tr>
+        <tr><td>同じPCで続きを評価したい</td><td>PDFを読み込み → 「OK」で復元</td></tr>
+        <tr><td>別のPCで続きを評価したい</td><td>前のPCでJSONエクスポート → 新PCでJSONインポート</td></tr>
+        <tr><td>ブラウザのキャッシュを削除した後</td><td>JSONインポートで復元（localStorageは消えています）</td></tr>
+        <tr><td>最初からやり直したい</td><td>設定タブ →「🗑 全データ削除」→ PDFを再読み込み</td></tr>
+        <tr><td>途中でPDFを差し替えたい</td><td>JSONエクスポート → 全データ削除 → 新PDFを読み込み → JSONインポート</td></tr>
+      </table>
     </div>
   </div>
 
