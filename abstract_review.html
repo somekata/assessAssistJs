@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抄録査読支援ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg: #f5f1e8;
+  --paper: #fdfaf3;
+  --ink: #1a1a1a;
+  --accent: #2a5c8a;
+  --accent-light: #e8f0f8;
+  --accent2: #c8741a;
+  --border: #d4cbb8;
+  --muted: #7a7060;
+  --success: #2d7a4f;
+  --danger: #c0392b;
+  --warn: #e67e22;
+  --star-color: #e0a820;
+  --card-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --basic-color: #5b4fcf;
+  --clinical-color: #1a7a5e;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--ink);font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;min-height:100vh;display:flex;flex-direction:column;font-size:14px;}
+
+/* ===== HEADER ===== */
+header{background:var(--accent);color:#fff;padding:.8rem 1.5rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+header h1{font-size:1.1rem;font-weight:700;letter-spacing:.04em;}
+#fileSection{display:flex;align-items:center;gap:.6rem;}
+#fileSection label{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.3rem .8rem;border-radius:5px;cursor:pointer;font-size:.8rem;white-space:nowrap;}
+#fileSection label:hover{background:rgba(255,255,255,.25);}
+#fileSection input{display:none;}
+#fileName{font-size:.75rem;opacity:.75;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* ===== TABS ===== */
+nav.tabs{background:#1e4a70;display:flex;gap:0;flex-shrink:0;}
+.tab-btn{background:transparent;border:none;color:rgba(255,255,255,.65);padding:.6rem 1.4rem;cursor:pointer;font-size:.85rem;font-weight:600;border-bottom:3px solid transparent;transition:all .15s;}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,.08);}
+.tab-btn.active{color:#fff;border-bottom-color:#f0c040;}
+.tab-panel{display:none;flex:1;overflow:hidden;}
+.tab-panel.active{display:flex;flex-direction:column;}
+
+/* ===== STATUS BAR ===== */
+#statusBar{background:var(--paper);border-bottom:1px solid var(--border);padding:.4rem 1.5rem;display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--muted);flex-shrink:0;}
+.stat-chip{display:flex;align-items:center;gap:.3rem;}
+.stat-chip .label{color:var(--muted);}
+.stat-chip .val{font-weight:700;color:var(--ink);}
+.stat-chip.confirmed .val{color:var(--success);}
+.stat-chip.todo .val{color:var(--warn);}
+#progressFrac{margin-left:auto;font-weight:700;color:var(--accent);}
+
+/* ===== REVIEW PANEL ===== */
+#reviewPanel{display:flex;flex-direction:column;flex:1;overflow:hidden;}
+.review-nav{background:var(--paper);border-bottom:1px solid var(--border);padding:.5rem 1.5rem;display:flex;align-items:center;gap:.8rem;flex-shrink:0;}
+.nav-btn{background:var(--accent);color:#fff;border:none;border-radius:5px;padding:.35rem .9rem;cursor:pointer;font-size:.82rem;font-weight:600;}
+.nav-btn:disabled{opacity:.35;cursor:not-allowed;}
+.nav-btn:not(:disabled):hover{opacity:.82;}
+#posLabel{font-weight:700;font-size:.9rem;min-width:80px;text-align:center;}
+#numLabel{font-size:.8rem;color:var(--muted);}
+
+.review-body{display:flex;flex:1;overflow:hidden;}
+
+/* LEFT: abstract */
+.abstract-pane{flex:1;overflow-y:auto;padding:1.2rem 1.5rem;display:flex;flex-direction:column;gap:.8rem;min-width:0;}
+.abstract-meta{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;}
+.abstract-num{background:var(--accent);color:#fff;font-size:.78rem;font-weight:700;padding:.2rem .6rem;border-radius:4px;}
+.cat-badge{font-size:.75rem;font-weight:700;padding:.15rem .55rem;border-radius:4px;}
+.cat-badge.basic{background:#ede8ff;color:var(--basic-color);}
+.cat-badge.clinical{background:#e0f4ee;color:var(--clinical-color);}
+.cat-badge.unset{background:#eee;color:var(--muted);}
+.abstract-title{font-size:1rem;font-weight:700;line-height:1.5;color:var(--ink);}
+.abstract-text{font-size:.88rem;line-height:1.9;color:#2c2c2c;white-space:pre-wrap;background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:.9rem 1rem;}
+
+/* RIGHT: scoring */
+.score-pane{width:280px;flex-shrink:0;border-left:1px solid var(--border);background:#faf7f0;overflow-y:auto;padding:1rem;}
+.pane-section{margin-bottom:1.2rem;}
+.pane-label{font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.45rem;}
+
+/* stars */
+.stars{display:flex;gap:.3rem;margin-bottom:.4rem;}
+.star-btn{font-size:1.5rem;background:none;border:none;cursor:pointer;color:#ccc;transition:color .1s,transform .1s;line-height:1;}
+.star-btn:hover,.star-btn.active{color:var(--star-color);}
+.star-btn:hover{transform:scale(1.15);}
+#scoreLabel{font-size:.8rem;color:var(--muted);min-height:1.2em;}
+
+/* status */
+.status-btns{display:flex;gap:.4rem;flex-wrap:wrap;}
+.status-btn{padding:.3rem .7rem;border-radius:5px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--muted);transition:all .15s;}
+.status-btn:hover{border-color:var(--accent);color:var(--accent);}
+.status-btn.active-todo{background:#fff3e0;border-color:var(--warn);color:var(--warn);}
+.status-btn.active-confirmed{background:#e8f5ee;border-color:var(--success);color:var(--success);}
+.status-btn.active-unconfirm{background:#fdecea;border-color:var(--danger);color:var(--danger);}
+.status-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* category */
+.cat-btns{display:flex;gap:.4rem;}
+.cat-btn{flex:1;padding:.3rem;border-radius:5px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--muted);text-align:center;transition:all .15s;}
+.cat-btn:hover{border-color:var(--accent);}
+.cat-btn.active-basic{background:#ede8ff;border-color:var(--basic-color);color:var(--basic-color);}
+.cat-btn.active-clinical{background:#e0f4ee;border-color:var(--clinical-color);color:var(--clinical-color);}
+
+/* comment */
+#commentBox{width:100%;height:90px;border:1.5px solid var(--border);border-radius:5px;padding:.45rem .6rem;font-size:.82rem;font-family:inherit;resize:vertical;background:#fff;outline:none;}
+#commentBox:focus{border-color:var(--accent);}
+.score-pane.locked .star-btn{pointer-events:none;opacity:.45;cursor:default;}
+.score-pane.locked .cat-btn{pointer-events:none;opacity:.45;cursor:default;}
+.score-pane.locked #commentBox{pointer-events:none;background:#f0ece0;color:var(--muted);resize:none;}
+.score-pane.locked .template-select{pointer-events:none;opacity:.45;}
+.score-pane.locked .insert-btn{pointer-events:none;opacity:.45;cursor:default;}
+.template-select{width:100%;padding:.35rem .5rem;border:1.5px solid var(--border);border-radius:5px;font-size:.78rem;background:#fff;font-family:inherit;outline:none;cursor:pointer;}
+.template-select:focus{border-color:var(--accent);}
+.insert-btn{margin-top:.3rem;width:100%;padding:.3rem;background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:.78rem;cursor:pointer;font-weight:600;}
+.insert-btn:hover{opacity:.85;}
+
+/* PDF btn */
+.pdf-open-btn{width:100%;padding:.4rem;background:var(--accent2);color:#fff;border:none;border-radius:5px;font-size:.8rem;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:.4rem;}
+.pdf-open-btn:hover{opacity:.85;}
+.pdf-open-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* save indicator */
+#saveIndicator{font-size:.72rem;color:var(--success);text-align:right;margin-top:.3rem;min-height:1em;}
+
+/* ===== LIST PANEL ===== */
+#listPanel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.list-toolbar{padding:.7rem 1.5rem;background:var(--paper);border-bottom:1px solid var(--border);display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;flex-shrink:0;}
+.list-toolbar input[type=text]{flex:1;min-width:160px;padding:.35rem .7rem;border:1.5px solid var(--border);border-radius:5px;font-size:.82rem;background:#fff;outline:none;}
+.list-toolbar input:focus{border-color:var(--accent);}
+.filter-select{padding:.35rem .5rem;border:1.5px solid var(--border);border-radius:5px;font-size:.78rem;background:#fff;outline:none;cursor:pointer;}
+
+/* summary cards */
+.summary-row{display:flex;gap:.6rem;padding:.7rem 1.5rem;background:#f0ece0;border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;}
+.sum-card{background:var(--paper);border-radius:6px;padding:.4rem .7rem;border:1px solid var(--border);text-align:center;min-width:64px;}
+.sum-card .sum-num{font-size:1.1rem;font-weight:700;color:var(--accent);}
+.sum-card .sum-lbl{font-size:.68rem;color:var(--muted);}
+.sum-card.confirmed .sum-num{color:var(--success);}
+.sum-card.todo-card .sum-num{color:var(--warn);}
+
+/* list table */
+.list-scroll{flex:1;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;}
+thead{position:sticky;top:0;background:var(--accent);color:#fff;z-index:10;}
+th{padding:.5rem .7rem;text-align:left;font-size:.78rem;font-weight:600;white-space:nowrap;}
+td{padding:.45rem .7rem;font-size:.8rem;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:hover td{background:#f0ece0;}
+tr.confirmed-row td{background:#f0faf5;}
+.tbl-num{font-weight:700;color:var(--accent);white-space:nowrap;}
+.tbl-title{max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tbl-cat{font-size:.72rem;font-weight:700;padding:.1rem .4rem;border-radius:3px;}
+.tbl-cat.basic{background:#ede8ff;color:var(--basic-color);}
+.tbl-cat.clinical{background:#e0f4ee;color:var(--clinical-color);}
+.tbl-cat.unset{background:#eee;color:var(--muted);}
+.tbl-star{color:var(--star-color);white-space:nowrap;}
+.tbl-status{font-size:.72rem;font-weight:700;white-space:nowrap;}
+.status-confirmed{color:var(--success);}
+.status-todo{color:var(--warn);}
+.status-untouched{color:#bbb;}
+.tbl-link{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem;}
+.tbl-link:hover{opacity:.8;}
+
+/* bulk cat */
+.bulk-bar{padding:.5rem 1.5rem;background:#fffde8;border-bottom:1px solid #e8d870;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;flex-shrink:0;font-size:.8rem;}
+.bulk-bar select{padding:.25rem .45rem;border:1.5px solid var(--border);border-radius:4px;font-size:.78rem;}
+.bulk-bar button{padding:.25rem .7rem;border:none;border-radius:4px;cursor:pointer;font-size:.78rem;font-weight:600;}
+.bulk-apply{background:var(--accent);color:#fff;}
+.bulk-apply:hover{opacity:.85;}
+
+/* ===== SETTINGS PANEL ===== */
+#settingsPanel{flex:1;overflow-y:auto;padding:1.5rem;}
+.settings-section{background:var(--paper);border-radius:8px;border:1px solid var(--border);padding:1.2rem;margin-bottom:1.2rem;max-width:720px;}
+.settings-section h3{font-size:.9rem;font-weight:700;margin-bottom:.8rem;color:var(--accent);}
+.tpl-list{display:flex;flex-direction:column;gap:.4rem;margin-bottom:.6rem;}
+.tpl-item{display:flex;gap:.4rem;align-items:center;}
+.tpl-item input{flex:1;padding:.3rem .6rem;border:1.5px solid var(--border);border-radius:5px;font-size:.82rem;font-family:inherit;background:#fff;outline:none;}
+.tpl-item input:focus{border-color:var(--accent);}
+.tpl-del{background:var(--danger);color:#fff;border:none;border-radius:4px;padding:.2rem .5rem;cursor:pointer;font-size:.75rem;}
+.tpl-del:hover{opacity:.8;}
+.tpl-add-row{display:flex;gap:.4rem;}
+.tpl-add-row input{flex:1;padding:.3rem .6rem;border:1.5px solid var(--border);border-radius:5px;font-size:.82rem;font-family:inherit;background:#fff;outline:none;}
+.tpl-add-row input:focus{border-color:var(--accent);}
+.btn-sm{padding:.3rem .7rem;border:none;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:600;}
+.btn-accent{background:var(--accent);color:#fff;}
+.btn-accent:hover{opacity:.85;}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-danger:hover{opacity:.8;}
+.shortcut-table{width:100%;border-collapse:collapse;font-size:.82rem;}
+.shortcut-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border);}
+.shortcut-table td:first-child{font-family:monospace;background:#f0ece0;border-radius:3px;width:140px;font-weight:700;}
+kbd{background:#f0ece0;border:1px solid #c0b8a8;border-radius:3px;padding:.1rem .35rem;font-family:monospace;font-size:.8rem;}
+
+/* export/import */
+.io-row{display:flex;gap:.6rem;flex-wrap:wrap;}
+.io-btn{padding:.4rem .9rem;border:none;border-radius:5px;cursor:pointer;font-size:.82rem;font-weight:600;}
+.io-btn.export{background:var(--success);color:#fff;}
+.io-btn.export:hover{opacity:.85;}
+.io-btn.import{background:var(--accent2);color:#fff;}
+.io-btn.import:hover{opacity:.85;}
+.io-btn.danger{background:var(--danger);color:#fff;}
+.io-btn.danger:hover{opacity:.85;}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;color:var(--muted);padding:2rem;text-align:center;}
+.empty-icon{font-size:3rem;}
+.empty-state p{font-size:.9rem;}
+
+/* ===== FOOTER ===== */
+footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.7rem 1.5rem;font-family:sans-serif;line-height:1.7;flex-shrink:0;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 抄録査読支援ツール</h1>
+  <div id="fileSection">
+    <label for="pdfFile">📂 PDFを読み込む<input type="file" id="pdfFile" accept=".pdf"></label>
+    <span id="fileName">ファイル未選択</span>
+    <label for="jsonImportHeader" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;padding:.3rem .8rem;border-radius:5px;cursor:pointer;font-size:.8rem;">💾 データ復元<input type="file" id="jsonImportHeader" accept=".json" style="display:none;"></label>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="review">📝 審査</button>
+  <button class="tab-btn" data-tab="list">📋 一覧</button>
+  <button class="tab-btn" data-tab="settings">⚙️ 設定</button>
+</nav>
+
+<!-- STATUS BAR -->
+<div id="statusBar">
+  <span class="stat-chip"><span class="label">未着手</span><span class="val" id="stUntouched">0</span></span>
+  <span class="stat-chip todo"><span class="label">途中</span><span class="val" id="stTodo">0</span></span>
+  <span class="stat-chip confirmed"><span class="label">確定</span><span class="val" id="stConfirmed">0</span></span>
+  <span>｜</span>
+  <span class="stat-chip"><span class="label">★1</span><span class="val" id="st1">0</span></span>
+  <span class="stat-chip"><span class="label">★2</span><span class="val" id="st2">0</span></span>
+  <span class="stat-chip"><span class="label">★3</span><span class="val" id="st3">0</span></span>
+  <span class="stat-chip"><span class="label">★4</span><span class="val" id="st4">0</span></span>
+  <span class="stat-chip"><span class="label">★5</span><span class="val" id="st5">0</span></span>
+  <span id="progressFrac">0 / 0</span>
+</div>
+
+<!-- ===== REVIEW TAB ===== -->
+<div id="tab-review" class="tab-panel active">
+  <div id="reviewPanel">
+    <div id="emptyReview" class="empty-state">
+      <div class="empty-icon">📄</div>
+      <p>PDFを読み込むと審査を開始できます。</p>
+      <p style="font-size:.8rem;">ヘッダーの「PDFを読み込む」ボタンから選択してください。</p>
+    </div>
+    <div id="reviewMain" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
+      <!-- nav -->
+      <div class="review-nav">
+        <button class="nav-btn" id="btnPrev">◀ 前へ</button>
+        <span id="posLabel">1 / 0</span>
+        <button class="nav-btn" id="btnNext">次へ ▶</button>
+        <span id="numLabel"></span>
+        <button class="pdf-open-btn" id="btnOpenPdf" style="width:auto;padding:.3rem .8rem;" disabled>🔍 PDF参照</button>
+      </div>
+      <!-- body -->
+      <div class="review-body">
+        <!-- left -->
+        <div class="abstract-pane">
+          <div class="abstract-meta">
+            <span class="abstract-num" id="abNum">-</span>
+            <span class="cat-badge unset" id="abCat">未分類</span>
+          </div>
+          <div class="abstract-title" id="abTitle">-</div>
+          <div class="abstract-text" id="abText"></div>
+        </div>
+        <!-- right -->
+        <div class="score-pane">
+          <!-- star -->
+          <div class="pane-section">
+            <div class="pane-label">評価</div>
+            <div class="stars" id="starRow">
+              <button class="star-btn" data-s="1">★</button>
+              <button class="star-btn" data-s="2">★</button>
+              <button class="star-btn" data-s="3">★</button>
+              <button class="star-btn" data-s="4">★</button>
+              <button class="star-btn" data-s="5">★</button>
+            </div>
+            <div id="scoreLabel">未評価</div>
+          </div>
+          <!-- status -->
+          <div class="pane-section">
+            <div class="pane-label">ステータス</div>
+            <div class="status-btns">
+              <button class="status-btn" id="btnTodo">途中</button>
+              <button class="status-btn" id="btnConfirm">✅ 確定</button>
+              <button class="status-btn" id="btnUnconfirm">↩ 未確定に戻す</button>
+            </div>
+          </div>
+          <!-- category -->
+          <div class="pane-section">
+            <div class="pane-label">区分</div>
+            <div class="cat-btns">
+              <button class="cat-btn" data-cat="basic">基礎</button>
+              <button class="cat-btn" data-cat="clinical">臨床</button>
+              <button class="cat-btn" data-cat="">未分類</button>
+            </div>
+          </div>
+          <!-- comment -->
+          <div class="pane-section">
+            <div class="pane-label">コメント</div>
+            <select class="template-select" id="templateSel">
+              <option value="">— 定型文を選択 —</option>
+            </select>
+            <button class="insert-btn" id="btnInsertTpl">挿入</button>
+            <br><br>
+            <textarea id="commentBox" placeholder="コメントを入力..."></textarea>
+            <div id="saveIndicator"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LIST TAB ===== -->
+<div id="tab-list" class="tab-panel">
+  <div id="listPanel">
+    <div class="summary-row" id="summaryRow">
+      <div class="sum-card"><div class="sum-num" id="sumTotal">0</div><div class="sum-lbl">総数</div></div>
+      <div class="sum-card todo-card"><div class="sum-num" id="sumTodo">0</div><div class="sum-lbl">途中</div></div>
+      <div class="sum-card confirmed"><div class="sum-num" id="sumConfirmed">0</div><div class="sum-lbl">確定</div></div>
+      <div class="sum-card"><div class="sum-num" id="sum1">0</div><div class="sum-lbl">★1</div></div>
+      <div class="sum-card"><div class="sum-num" id="sum2">0</div><div class="sum-lbl">★2</div></div>
+      <div class="sum-card"><div class="sum-num" id="sum3">0</div><div class="sum-lbl">★3</div></div>
+      <div class="sum-card"><div class="sum-num" id="sum4">0</div><div class="sum-lbl">★4</div></div>
+      <div class="sum-card"><div class="sum-num" id="sum5">0</div><div class="sum-lbl">★5</div></div>
+    </div>
+    <div class="bulk-bar">
+      <strong>一括操作：</strong>
+      チェックした演題を
+      <select id="bulkCatSel"><option value="basic">基礎</option><option value="clinical">臨床</option><option value="">未分類</option></select>
+      <button class="bulk-apply" onclick="applyBulkCat()">区分適用</button>
+      <span style="color:var(--border);margin:0 .2rem;">｜</span>
+      <button class="bulk-apply" style="background:var(--success);" onclick="applyBulkConfirm()">✅ 一括確定</button>
+      <span style="color:var(--muted);font-size:.75rem;" id="bulkCount">（0件選択中）</span>
+    </div>
+    <div class="list-toolbar">
+      <input type="text" id="listSearch" placeholder="番号・タイトル・コメントで絞り込み...">
+      <select class="filter-select" id="filterCat">
+        <option value="">区分：すべて</option>
+        <option value="basic">基礎</option>
+        <option value="clinical">臨床</option>
+        <option value="unset">未分類</option>
+      </select>
+      <select class="filter-select" id="filterStatus">
+        <option value="">状態：すべて</option>
+        <option value="untouched">未着手</option>
+        <option value="todo">途中</option>
+        <option value="confirmed">確定</option>
+      </select>
+      <select class="filter-select" id="filterStar">
+        <option value="">評価：すべて</option>
+        <option value="1">★1</option>
+        <option value="2">★2</option>
+        <option value="3">★3</option>
+        <option value="4">★4</option>
+        <option value="5">★5</option>
+        <option value="none">未評価</option>
+      </select>
+    </div>
+    <div class="list-scroll">
+      <table id="listTable">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="checkAll" title="全選択"></th>
+            <th>番号</th><th>タイトル</th><th>区分</th><th>評価</th><th>状態</th><th>コメント</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="listBody"></tbody>
+      </table>
+      <div id="listEmpty" class="empty-state" style="display:none;">
+        <div class="empty-icon">🔍</div>
+        <p>該当する演題がありません。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS TAB ===== -->
+<div id="tab-settings" class="tab-panel">
+  <div id="settingsPanel">
+    <!-- reviewer -->
+    <div class="settings-section">
+      <h3>👤 評価者情報</h3>
+      <div style="display:flex;align-items:center;gap:.8rem;">
+        <label style="font-size:.85rem;font-weight:600;white-space:nowrap;">氏名</label>
+        <input type="text" id="reviewerName" placeholder="例：金子 幸弘" autocomplete="off"
+          style="flex:1;max-width:280px;padding:.45rem .7rem;border:1.5px solid var(--border);border-radius:6px;font-size:.9rem;font-family:inherit;outline:none;background:#fff;">
+        <span id="reviewerSaved" style="font-size:.75rem;color:var(--success);"></span>
+      </div>
+      <p style="font-size:.75rem;color:var(--muted);margin-top:.5rem;">入力した氏名はJSONエクスポート時にファイル名・データに反映されます。</p>
+    </div>
+    <!-- templates -->
+    <div class="settings-section">
+      <h3>📝 定型文管理</h3>
+      <div class="tpl-list" id="tplList"></div>
+      <div class="tpl-add-row">
+        <input type="text" id="newTplInput" placeholder="新しい定型文を入力...">
+        <button class="btn-sm btn-accent" onclick="addTemplate()">追加</button>
+      </div>
+    </div>
+    <!-- shortcuts -->
+    <div class="settings-section">
+      <h3>⌨️ キーボードショートカット</h3>
+      <table class="shortcut-table">
+        <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>前の演題 / 次の演題</td></tr>
+        <tr><td><kbd>1</kbd> 〜 <kbd>5</kbd></td><td>評価を★1〜★5に設定</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>評価を確定</td></tr>
+        <tr><td><kbd>Backspace</kbd></td><td>未確定に戻す</td></tr>
+        <tr><td><kbd>B</kbd></td><td>区分：基礎</td></tr>
+        <tr><td><kbd>C</kbd></td><td>区分：臨床</td></tr>
+      </table>
+      <p style="font-size:.75rem;color:var(--muted);margin-top:.6rem;">※ コメント入力中はショートカット無効になります。</p>
+    </div>
+    <!-- data -->
+    <div class="settings-section">
+      <h3>💾 データ管理</h3>
+      <div class="io-row">
+        <button class="io-btn export" onclick="exportJson()">📤 JSONエクスポート</button>
+        <label class="io-btn import" style="cursor:pointer;">📥 JSONインポート<input type="file" id="jsonImport" accept=".json" style="display:none;"></label>
+        <button class="io-btn danger" onclick="clearAll()">🗑 全データ削除</button>
+      </div>
+      <p style="font-size:.75rem;color:var(--muted);margin-top:.6rem;">エクスポートしたJSONは、次回セッションで「データ復元」から読み込めます。</p>
+    </div>
+    <!-- about -->
+    <div class="settings-section">
+      <h3>ℹ️ このツールについて</h3>
+      <p style="font-size:.82rem;line-height:1.8;color:var(--muted);">抄録PDFを読み込み、演題ごとに評価・コメント・区分を記録するブラウザ完結型査読支援ツールです。データはブラウザのlocalStorageに自動保存されます。外部サーバーへの通信は一切行いません。</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  本ツールはAI（Claude, Anthropic）を用いて作成されました。内容には誤りが含まれる可能性があります。<br>
+  医療上の判断には必ず公式の教科書・文献・専門家の指導を参照してください。<br>
+  二次利用・再配布は自己責任のもとで可能です。その際、本注記の保持を推奨します。
+</footer>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===== STATE =====
+let abstracts = [];   // [{page,number,title,abstract,score,comment,status,category}]
+let currentIdx = 0;
+let pdfUrl = null;    // object URL for PDF
+let saveTimer = null;
+
+const LS_KEY = 'abstractReview_data';
+const LS_TPL = 'abstractReview_templates';
+const LS_REVIEWER = 'abstractReview_reviewer';
+
+const DEFAULT_TEMPLATES = [
+  '1症例のみである。','新規性に乏しい。','単施設後ろ向きコホート研究である。',
+  '誤字脱字が多い。','考察の深さが不十分である。','データの再現性にやや疑問が残る。',
+  '抄録の書き方が不十分である。','結果の解釈に飛躍がある。','方法の記載が不足している。',
+  '結論がデータから十分に導かれていない。','統計解析の説明が不十分である。',
+  '症例数が少なく、検証力が低い。','倫理的配慮に関する記述が不足している。',
+  '視点が興味深く、発想に独自性がある。','実臨床に即した内容である。',
+  '構成が明快で読みやすい。','今後の発展が期待される研究である。',
+  '臨床的意義が高いと考えられる。','データ解析が丁寧で信頼性が高い。'
+];
+
+let templates = JSON.parse(localStorage.getItem(LS_TPL) || 'null') || [...DEFAULT_TEMPLATES];
+
+// ===== TABS =====
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'list') renderList();
+    if (btn.dataset.tab === 'settings') renderTemplateSettings();
+  });
+});
+
+// ===== PDF LOAD =====
+document.getElementById('pdfFile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('fileName').textContent = file.name;
+
+  // revoke old
+  if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+  pdfUrl = URL.createObjectURL(file);
+  document.getElementById('btnOpenPdf').disabled = false;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const total = pdf.numPages;
+
+  // try restore from localStorage
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.length > 0 && confirm('保存済みの査読データが見つかりました。復元しますか？\n（キャンセルで新規読み込み）')) {
+        abstracts = parsed;
+        currentIdx = 0;
+        showReviewMain();
+        renderReview();
+        updateStatus();
+        return;
+      }
+    } catch(e){}
+  }
+
+  abstracts = [];
+  for (let i = 1; i <= total; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const items = content.items.map(it => ({ text: it.str, x: it.transform[4], y: it.transform[5] }));
+    const lineMap = new Map();
+    for (const item of items) {
+      const yKey = Math.round(item.y / 3) * 3;
+      if (!lineMap.has(yKey)) lineMap.set(yKey, []);
+      lineMap.get(yKey).push(item);
+    }
+    const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+    const lines = sortedYs.map(y =>
+      lineMap.get(y).sort((a, b) => a.x - b.x).map(it => it.text).join('')
+    );
+    const nonEmpty = lines.map(l => l.trim()).filter(l => l.length > 0);
+    if (nonEmpty.length === 0) continue;
+    abstracts.push({
+      page: i,
+      number: nonEmpty[0] || '',
+      title: nonEmpty[1] || '',
+      abstract: nonEmpty.slice(2).join('\n').trim(),
+      score: null,
+      comment: '',
+      status: 'untouched',
+      category: ''
+    });
+  }
+
+  currentIdx = 0;
+  saveData();
+  showReviewMain();
+  renderReview();
+  updateStatus();
+});
+
+function showReviewMain() {
+  document.getElementById('emptyReview').style.display = 'none';
+  const m = document.getElementById('reviewMain');
+  m.style.display = 'flex';
+}
+
+// ===== REVIEW RENDER =====
+function renderReview() {
+  if (abstracts.length === 0) return;
+  const a = abstracts[currentIdx];
+
+  document.getElementById('posLabel').textContent = (currentIdx + 1) + ' / ' + abstracts.length;
+  document.getElementById('numLabel').textContent = a.number;
+  document.getElementById('abNum').textContent = a.number;
+  document.getElementById('abTitle').textContent = a.title;
+  document.getElementById('abText').textContent = a.abstract;
+
+  // category badge
+  const catEl = document.getElementById('abCat');
+  catEl.className = 'cat-badge ' + (a.category === 'basic' ? 'basic' : a.category === 'clinical' ? 'clinical' : 'unset');
+  catEl.textContent = a.category === 'basic' ? '基礎' : a.category === 'clinical' ? '臨床' : '未分類';
+
+  // stars
+  document.querySelectorAll('.star-btn').forEach(b => {
+    b.classList.toggle('active', a.score !== null && parseInt(b.dataset.s) <= a.score);
+  });
+  document.getElementById('scoreLabel').textContent = a.score ? '★'.repeat(a.score) + ' (' + a.score + '点)' : '未評価';
+
+  // confirmed lock
+  const confirmed = a.status === 'confirmed';
+  document.querySelector('.score-pane').classList.toggle('locked', confirmed);
+
+  // status btns
+  const btnTodo     = document.getElementById('btnTodo');
+  const btnConfirm  = document.getElementById('btnConfirm');
+  const btnUnconfirm= document.getElementById('btnUnconfirm');
+
+  btnTodo.className      = 'status-btn' + (a.status === 'todo' ? ' active-todo' : '');
+  btnConfirm.className   = 'status-btn' + (confirmed ? ' active-confirmed' : '');
+  btnUnconfirm.className = 'status-btn' + (confirmed ? ' active-unconfirm' : '');
+
+  // 確定中：途中・確定はdisabled、未確定に戻すはenabled
+  // 未確定中：途中・確定はenabled、未確定に戻すはdisabled
+  btnTodo.disabled      = confirmed;
+  btnConfirm.disabled   = confirmed;
+  btnUnconfirm.disabled = !confirmed;
+
+  // cat btns
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    const c = b.dataset.cat;
+    b.className = 'cat-btn' + (a.category === c ? (c === 'basic' ? ' active-basic' : c === 'clinical' ? ' active-clinical' : '') : '');
+  });
+
+  // comment
+  document.getElementById('commentBox').value = a.comment;
+  document.getElementById('saveIndicator').textContent = '';
+
+  // nav
+  document.getElementById('btnPrev').disabled = currentIdx === 0;
+  document.getElementById('btnNext').disabled = currentIdx === abstracts.length - 1;
+}
+
+// ===== NAV =====
+document.getElementById('btnPrev').addEventListener('click', () => { if (currentIdx > 0) { currentIdx--; renderReview(); } });
+document.getElementById('btnNext').addEventListener('click', () => { if (currentIdx < abstracts.length - 1) { currentIdx++; renderReview(); } });
+
+// ===== PDF OPEN =====
+document.getElementById('btnOpenPdf').addEventListener('click', () => {
+  if (!pdfUrl) return;
+  const a = abstracts[currentIdx];
+  // Open PDF at the specific page
+  window.open(pdfUrl + '#page=' + a.page, '_blank');
+});
+
+// ===== STARS =====
+document.querySelectorAll('.star-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const a = abstracts[currentIdx];
+    if (a.status === 'confirmed') return;
+    const s = parseInt(btn.dataset.s);
+    a.score = (a.score === s) ? null : s;
+    if (a.status === 'untouched') a.status = 'todo';
+    saveData();
+    renderReview();
+    updateStatus();
+  });
+});
+
+// ===== STATUS =====
+document.getElementById('btnTodo').addEventListener('click', () => {
+  abstracts[currentIdx].status = 'todo'; saveData(); renderReview(); updateStatus();
+});
+document.getElementById('btnConfirm').addEventListener('click', () => {
+  abstracts[currentIdx].status = 'confirmed'; saveData(); renderReview(); updateStatus();
+});
+document.getElementById('btnUnconfirm').addEventListener('click', () => {
+  abstracts[currentIdx].status = 'untouched'; saveData(); renderReview(); updateStatus();
+});
+
+// ===== CATEGORY =====
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const a = abstracts[currentIdx];
+    if (a.status === 'confirmed') return;
+    a.category = btn.dataset.cat;
+    if (a.status === 'untouched') a.status = 'todo';
+    saveData(); renderReview(); updateStatus();
+  });
+});
+
+// ===== COMMENT =====
+document.getElementById('commentBox').addEventListener('input', function() {
+  const a = abstracts[currentIdx];
+  if (a.status === 'confirmed') return;
+  a.comment = this.value;
+  if (a.status === 'untouched') a.status = 'todo';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveData();
+    updateStatus();
+    document.getElementById('saveIndicator').textContent = '✓ 保存済み';
+  }, 600);
+});
+
+// ===== TEMPLATES =====
+function renderTemplateSel() {
+  const sel = document.getElementById('templateSel');
+  sel.innerHTML = '<option value="">— 定型文を選択 —</option>';
+  templates.forEach((t, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = t.length > 28 ? t.slice(0, 28) + '…' : t;
+    sel.appendChild(opt);
+  });
+}
+document.getElementById('btnInsertTpl').addEventListener('click', () => {
+  const sel = document.getElementById('templateSel');
+  if (sel.value === '') return;
+  const tpl = templates[parseInt(sel.value)];
+  const box = document.getElementById('commentBox');
+  const pos = box.selectionStart;
+  const cur = box.value;
+  const insert = cur.length > 0 && !cur.endsWith('\n') ? '\n' + tpl : tpl;
+  box.value = cur.slice(0, pos) + insert + cur.slice(pos);
+  box.dispatchEvent(new Event('input'));
+  box.focus();
+});
+
+function renderTemplateSettings() {
+  const list = document.getElementById('tplList');
+  list.innerHTML = '';
+  templates.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'tpl-item';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.value = t;
+    inp.addEventListener('change', () => { templates[i] = inp.value; saveTemplates(); renderTemplateSel(); });
+    const del = document.createElement('button');
+    del.className = 'tpl-del'; del.textContent = '削除';
+    del.addEventListener('click', () => { templates.splice(i, 1); saveTemplates(); renderTemplateSettings(); renderTemplateSel(); });
+    row.appendChild(inp); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+function addTemplate() {
+  const inp = document.getElementById('newTplInput');
+  const v = inp.value.trim();
+  if (!v) return;
+  templates.push(v);
+  inp.value = '';
+  saveTemplates();
+  renderTemplateSettings();
+  renderTemplateSel();
+}
+
+function saveTemplates() { localStorage.setItem(LS_TPL, JSON.stringify(templates)); }
+
+// ===== STATUS BAR =====
+function updateStatus() {
+  const cnt = { untouched:0, todo:0, confirmed:0 };
+  const stars = {1:0,2:0,3:0,4:0,5:0};
+  abstracts.forEach(a => {
+    cnt[a.status] = (cnt[a.status] || 0) + 1;
+    if (a.score) stars[a.score]++;
+  });
+  document.getElementById('stUntouched').textContent = cnt.untouched || 0;
+  document.getElementById('stTodo').textContent = cnt.todo || 0;
+  document.getElementById('stConfirmed').textContent = cnt.confirmed || 0;
+  for (let i=1;i<=5;i++) document.getElementById('st'+i).textContent = stars[i];
+  document.getElementById('progressFrac').textContent =
+    (cnt.confirmed || 0) + ' / ' + abstracts.length + ' 確定';
+
+  // list summary
+  document.getElementById('sumTotal').textContent = abstracts.length;
+  document.getElementById('sumTodo').textContent = cnt.todo || 0;
+  document.getElementById('sumConfirmed').textContent = cnt.confirmed || 0;
+  for (let i=1;i<=5;i++) document.getElementById('sum'+i).textContent = stars[i];
+}
+
+// ===== LIST =====
+function renderList() {
+  const q = document.getElementById('listSearch').value.toLowerCase();
+  const fCat = document.getElementById('filterCat').value;
+  const fStat = document.getElementById('filterStatus').value;
+  const fStar = document.getElementById('filterStar').value;
+
+  const tbody = document.getElementById('listBody');
+  tbody.innerHTML = '';
+  let count = 0;
+
+  abstracts.forEach((a, i) => {
+    const cat = a.category || '';
+    if (fCat === 'basic' && cat !== 'basic') return;
+    if (fCat === 'clinical' && cat !== 'clinical') return;
+    if (fCat === 'unset' && cat !== '') return;
+    if (fStat && a.status !== fStat) return;
+    if (fStar === 'none' && a.score !== null) return;
+    if (fStar && fStar !== 'none' && a.score !== parseInt(fStar)) return;
+    if (q && !a.number.toLowerCase().includes(q) && !a.title.toLowerCase().includes(q) && !a.comment.toLowerCase().includes(q)) return;
+
+    count++;
+    const tr = document.createElement('tr');
+    if (a.status === 'confirmed') tr.classList.add('confirmed-row');
+
+    const catLabel = cat === 'basic' ? '基礎' : cat === 'clinical' ? '臨床' : '未分類';
+    const catCls = cat === 'basic' ? 'basic' : cat === 'clinical' ? 'clinical' : 'unset';
+    const starsStr = a.score ? '★'.repeat(a.score) + '☆'.repeat(5 - a.score) : '—';
+    const statusLabel = a.status === 'confirmed' ? '<span class="tbl-status status-confirmed">✅ 確定</span>'
+                      : a.status === 'todo' ? '<span class="tbl-status status-todo">⏳ 途中</span>'
+                      : '<span class="tbl-status status-untouched">— 未着手</span>';
+    const comment = a.comment ? (a.comment.length > 20 ? a.comment.slice(0,20)+'…' : a.comment) : '';
+
+    tr.innerHTML =
+      '<td><input type="checkbox" class="row-check" data-i="'+i+'"></td>'+
+      '<td class="tbl-num">'+escHtml(a.number)+'</td>'+
+      '<td class="tbl-title" title="'+escHtml(a.title)+'">'+escHtml(a.title)+'</td>'+
+      '<td><span class="tbl-cat '+catCls+'">'+catLabel+'</span></td>'+
+      '<td class="tbl-star">'+starsStr+'</td>'+
+      '<td>'+statusLabel+'</td>'+
+      '<td style="font-size:.75rem;color:var(--muted);">'+escHtml(comment)+'</td>'+
+      '<td><button class="tbl-link" onclick="jumpTo('+i+')">審査</button></td>';
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('listEmpty').style.display = count === 0 ? 'flex' : 'none';
+  document.querySelectorAll('table').forEach(t => t.style.display = count === 0 ? 'none' : '');
+  updateBulkCount();
+  updateStatus();
+}
+
+// checkAll
+document.getElementById('checkAll').addEventListener('change', function() {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = this.checked);
+  updateBulkCount();
+});
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('row-check')) updateBulkCount();
+});
+function updateBulkCount() {
+  const n = document.querySelectorAll('.row-check:checked').length;
+  document.getElementById('bulkCount').textContent = '（' + n + '件選択中）';
+}
+
+function applyBulkCat() {
+  const cat = document.getElementById('bulkCatSel').value;
+  document.querySelectorAll('.row-check:checked').forEach(c => {
+    const i = parseInt(c.dataset.i);
+    abstracts[i].category = cat;
+    if (abstracts[i].status === 'untouched') abstracts[i].status = 'todo';
+  });
+  saveData();
+  renderList();
+}
+
+function applyBulkConfirm() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  if (checked.length === 0) { alert('演題を選択してください。'); return; }
+  if (!confirm(checked.length + '件の演題を一括確定してもよいですか？')) return;
+  checked.forEach(c => {
+    const i = parseInt(c.dataset.i);
+    abstracts[i].status = 'confirmed';
+  });
+  saveData();
+  renderList();
+  updateStatus();
+  // 現在表示中の演題が含まれていれば再描画
+  renderReview();
+}
+
+function jumpTo(i) {
+  currentIdx = i;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="review"]').classList.add('active');
+  document.getElementById('tab-review').classList.add('active');
+  renderReview();
+}
+
+['listSearch','filterCat','filterStatus','filterStar'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderList);
+  document.getElementById(id).addEventListener('change', renderList);
+});
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (abstracts.length === 0) return;
+  const a = abstracts[currentIdx];
+
+  if (e.key === 'ArrowLeft') { if (currentIdx > 0) { currentIdx--; renderReview(); } }
+  else if (e.key === 'ArrowRight') { if (currentIdx < abstracts.length-1) { currentIdx++; renderReview(); } }
+  else if (['1','2','3','4','5'].includes(e.key)) {
+    if (a.status === 'confirmed') return;
+    const s = parseInt(e.key);
+    a.score = a.score === s ? null : s;
+    if (a.status === 'untouched') a.status = 'todo';
+    saveData(); renderReview(); updateStatus();
+  }
+  else if (e.key === 'Enter') {
+    if (a.status === 'confirmed') return;
+    a.status = 'confirmed'; saveData(); renderReview(); updateStatus();
+  }
+  else if (e.key === 'Backspace') {
+    if (a.status !== 'confirmed') return;
+    a.status = 'untouched'; saveData(); renderReview(); updateStatus();
+  }
+  else if (e.key === 'b' || e.key === 'B') {
+    if (a.status === 'confirmed') return;
+    a.category = 'basic'; if (a.status==='untouched') a.status='todo';
+    saveData(); renderReview(); updateStatus();
+  }
+  else if (e.key === 'c' || e.key === 'C') {
+    if (a.status === 'confirmed') return;
+    a.category = 'clinical'; if (a.status==='untouched') a.status='todo';
+    saveData(); renderReview(); updateStatus();
+  }
+});
+
+// ===== DATA PERSISTENCE =====
+function saveData() { localStorage.setItem(LS_KEY, JSON.stringify(abstracts)); }
+
+function exportJson() {
+  const reviewerName = document.getElementById('reviewerName').value.trim();
+  const payload = { reviewer: reviewerName, abstracts };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  const nameStr = reviewerName ? '_' + reviewerName.replace(/\s/g,'') : '';
+  a.href = URL.createObjectURL(blob);
+  a.download = 'abstract_review' + nameStr + '_' + dateStr + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function loadJson(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const raw = JSON.parse(r.result);
+      // 新形式 {reviewer, abstracts} と旧形式（配列）の両対応
+      let data, reviewer = '';
+      if (Array.isArray(raw)) {
+        data = raw;
+      } else if (raw && Array.isArray(raw.abstracts)) {
+        data = raw.abstracts;
+        reviewer = raw.reviewer || '';
+      } else {
+        throw new Error('invalid');
+      }
+      abstracts = data;
+      if (reviewer) document.getElementById('reviewerName').value = reviewer;
+      currentIdx = 0;
+      saveData();
+      showReviewMain();
+      renderReview();
+      updateStatus();
+      alert('データを復元しました（' + abstracts.length + '件）');
+    } catch(e) { alert('JSONの読み込みに失敗しました。'); }
+  };
+  r.readAsText(file);
+}
+
+document.getElementById('jsonImport').addEventListener('change', e => { if(e.target.files[0]) loadJson(e.target.files[0]); });
+document.getElementById('jsonImportHeader').addEventListener('change', e => { if(e.target.files[0]) loadJson(e.target.files[0]); });
+
+function clearAll() {
+  if (!confirm('すべての査読データを削除してもよいですか？この操作は取り消せません。')) return;
+  abstracts = [];
+  localStorage.removeItem(LS_KEY);
+  currentIdx = 0;
+  document.getElementById('emptyReview').style.display = '';
+  document.getElementById('reviewMain').style.display = 'none';
+  updateStatus();
+  renderList();
+}
+
+// ===== UTILS =====
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== INIT =====
+// 評価者名の復元
+const savedReviewer = localStorage.getItem(LS_REVIEWER);
+if (savedReviewer) document.getElementById('reviewerName').value = savedReviewer;
+document.getElementById('reviewerName').addEventListener('input', function() {
+  localStorage.setItem(LS_REVIEWER, this.value);
+  const ind = document.getElementById('reviewerSaved');
+  if (ind) { ind.textContent = '✓ 保存済み'; setTimeout(() => { ind.textContent = ''; }, 1500); }
+});
+
+renderTemplateSel();
+updateStatus();
+</script>
+</body>
+</html>

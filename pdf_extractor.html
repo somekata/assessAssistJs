@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抄録PDF抽出ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --paper: #fdfaf3;
+    --ink: #1a1a1a;
+    --accent: #2a5c8a;
+    --accent2: #c8741a;
+    --border: #d4cbb8;
+    --muted: #7a7060;
+    --success: #2d7a4f;
+    --card-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Noto Serif JP', 'Hiragino Mincho ProN', Georgia, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 1.2rem 2rem;
+  }
+  header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: 0.05em; }
+  header .subtitle { font-size: 0.8rem; opacity: 0.75; font-family: 'Noto Sans JP', sans-serif; }
+  main {
+    flex: 1;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .upload-zone {
+    background: var(--paper);
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1.5rem;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: #f0f6ff;
+  }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 0.8rem; }
+  .upload-zone p { color: var(--muted); font-size: 0.95rem; font-family: 'Noto Sans JP', sans-serif; }
+  .upload-zone strong { color: var(--accent); }
+  #status {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    min-height: 1.4em;
+  }
+  #status.processing { color: var(--accent2); }
+  #status.done { color: var(--success); }
+  #status.error { color: #c0392b; }
+  #progress-bar-wrap {
+    display: none;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-bottom: 1.2rem;
+    overflow: hidden;
+  }
+  #progress-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.2s;
+    border-radius: 3px;
+  }
+  .controls {
+    display: flex;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn {
+    padding: 0.5rem 1.2rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:not(:disabled):hover { opacity: 0.85; }
+  .btn:not(:disabled):active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-secondary { background: var(--accent2); color: white; }
+  .btn-ghost { background: transparent; border: 1.5px solid var(--border); color: var(--ink); }
+  .result-count { margin-left: auto; font-family: 'Noto Sans JP', sans-serif; font-size: 0.85rem; color: var(--muted); }
+  .search-wrap { display: none; margin-bottom: 1rem; }
+  .search-wrap input {
+    width: 100%;
+    padding: 0.55rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.9rem;
+    background: var(--paper);
+    outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  #results { display: flex; flex-direction: column; gap: 1rem; }
+  .card {
+    background: var(--paper);
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
+    border-left: 4px solid var(--accent);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.13); }
+  .card-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.9rem 1.2rem 0.6rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .card-num {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: white;
+    background: var(--accent);
+    padding: 0.15rem 0.55rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .card-title { font-size: 1rem; font-weight: 600; flex: 1; line-height: 1.5; }
+  .card-toggle { font-size: 0.8rem; color: var(--muted); white-space: nowrap; margin-left: 0.5rem; }
+  .card-body { padding: 0 1.2rem 1rem; display: none; }
+  .card-body.open { display: block; }
+  .abstract-text {
+    font-size: 0.9rem;
+    line-height: 1.85;
+    color: #2c2c2c;
+    white-space: pre-wrap;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .page-badge { font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem; font-family: 'Noto Sans JP', sans-serif; }
+  footer {
+    background: #2c2c2c;
+    color: #aaa;
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 1rem 2rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    line-height: 1.7;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📄 抄録PDF抽出ツール</h1>
+  <div class="subtitle">PDFから演題番号・タイトル・抄録本文を自動抽出します（1ページ1演題形式）</div>
+</header>
+
+<main>
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".pdf">
+    <div class="upload-icon">📂</div>
+    <p><strong>PDFファイルをドロップ</strong>またはクリックして選択</p>
+    <p style="margin-top:0.4rem;font-size:0.82rem;">1ページ1演題形式のPDFに対応 ／ ブラウザ内で処理・外部送信なし</p>
+  </div>
+
+  <div id="status"></div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+
+  <div class="controls" style="display:none" id="controls">
+    <button class="btn btn-primary" id="btnExpandAll">すべて展開</button>
+    <button class="btn btn-ghost" id="btnCollapseAll">すべて折りたたむ</button>
+    <button class="btn btn-secondary" id="btnDlJson">JSONダウンロード</button>
+    <button class="btn btn-secondary" id="btnDlCsv">CSVダウンロード</button>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+
+  <div class="search-wrap" id="searchWrap">
+    <input type="text" id="searchBox" placeholder="演題番号・タイトル・本文で絞り込み...">
+  </div>
+
+  <div id="results"></div>
+</main>
+
+<footer>
+  本ツールはAI（Claude, Anthropic）を用いて作成されました。内容には誤りが含まれる可能性があります。<br>
+  医療上の判断には必ず公式の教科書・文献・専門家の指導を参照してください。<br>
+  二次利用・再配布は自己責任のもとで可能です。その際、本注記の保持を推奨します。
+</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let extractedData = [];
+
+const setStatus = (msg, cls='') => {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = cls;
+};
+const setProgress = pct => {
+  document.getElementById('progress-bar-wrap').style.display = 'block';
+  document.getElementById('progress-bar').style.width = pct + '%';
+};
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') handleFile(f);
+  else setStatus('PDFファイルを選択してください。', 'error');
+});
+
+function parsePage(lines) {
+  const nonEmpty = lines.map(l => l.trim()).filter(l => l.length > 0);
+  if (nonEmpty.length === 0) return null;
+  const num = nonEmpty[0] || '';
+  const title = nonEmpty[1] || '';
+  const abstract = nonEmpty.slice(2).join('\n').trim();
+  return { number: num, title, abstract };
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  setStatus('PDFを読み込み中...', 'processing');
+  setProgress(5);
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('searchWrap').style.display = 'none';
+  document.getElementById('results').innerHTML = '';
+  extractedData = [];
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const total = pdf.numPages;
+    setStatus('全' + total + 'ページを解析中...', 'processing');
+
+    for (let i = 1; i <= total; i++) {
+      setProgress(5 + Math.round((i / total) * 90));
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+
+      // Y座標でグループ化してテキスト行を再構成
+      const items = content.items.map(it => ({
+        text: it.str,
+        x: it.transform[4],
+        y: it.transform[5],
+      }));
+
+      const lineMap = new Map();
+      for (const item of items) {
+        const yKey = Math.round(item.y / 3) * 3;
+        if (!lineMap.has(yKey)) lineMap.set(yKey, []);
+        lineMap.get(yKey).push(item);
+      }
+      const sortedYs = [...lineMap.keys()].sort((a, b) => b - a);
+      const lines = sortedYs.map(y =>
+        lineMap.get(y).sort((a, b) => a.x - b.x).map(it => it.text).join('')
+      );
+
+      const parsed = parsePage(lines);
+      if (parsed) extractedData.push({ page: i, ...parsed });
+    }
+
+    setProgress(100);
+    renderResults(extractedData);
+
+    if (extractedData.length > 0) {
+      setStatus('✅ 抽出完了：' + extractedData.length + '件の演題が見つかりました。', 'done');
+      document.getElementById('controls').style.display = 'flex';
+      document.getElementById('searchWrap').style.display = 'block';
+      document.getElementById('resultCount').textContent = extractedData.length + '件';
+    } else {
+      setStatus('演題データが見つかりませんでした。PDFの構造を確認してください。', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    setStatus('エラー：' + err.message, 'error');
+  }
+}
+
+function renderResults(data) {
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+  data.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.idx = idx;
+    card.innerHTML =
+      '<div class="card-header" onclick="toggleCard(' + idx + ')">' +
+        '<span class="card-num">' + escHtml(item.number) + '</span>' +
+        '<span class="card-title">' + escHtml(item.title) + '</span>' +
+        '<span class="card-toggle" id="toggle-' + idx + '">▼ 展開</span>' +
+      '</div>' +
+      '<div class="card-body" id="body-' + idx + '">' +
+        '<div class="abstract-text">' + escHtml(item.abstract) + '</div>' +
+        '<div class="page-badge">📄 Page ' + item.page + '</div>' +
+      '</div>';
+    container.appendChild(card);
+  });
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toggleCard(idx) {
+  const body = document.getElementById('body-' + idx);
+  const tog = document.getElementById('toggle-' + idx);
+  const open = body.classList.toggle('open');
+  tog.textContent = open ? '▲ 閉じる' : '▼ 展開';
+}
+
+document.getElementById('btnExpandAll').addEventListener('click', () => {
+  document.querySelectorAll('.card-body').forEach(b => b.classList.add('open'));
+  document.querySelectorAll('[id^="toggle-"]').forEach(t => t.textContent = '▲ 閉じる');
+});
+document.getElementById('btnCollapseAll').addEventListener('click', () => {
+  document.querySelectorAll('.card-body').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('[id^="toggle-"]').forEach(t => t.textContent = '▼ 展開');
+});
+
+document.getElementById('searchBox').addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  document.querySelectorAll('.card').forEach(card => {
+    const item = extractedData[card.dataset.idx];
+    const hit = !q ||
+      item.number.toLowerCase().includes(q) ||
+      item.title.toLowerCase().includes(q) ||
+      item.abstract.toLowerCase().includes(q);
+    card.style.display = hit ? '' : 'none';
+  });
+});
+
+document.getElementById('btnDlJson').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(extractedData, null, 2)], { type: 'application/json' });
+  dl(blob, 'abstracts.json');
+});
+
+document.getElementById('btnDlCsv').addEventListener('click', () => {
+  const rows = [['page','number','title','abstract']];
+  extractedData.forEach(d => {
+    rows.push([d.page, d.number, d.title, d.abstract].map(v =>
+      '"' + String(v).replace(/"/g, '""') + '"'
+    ));
+  });
+  const csv = '\uFEFF' + rows.map(r => r.join(',')).join('\r\n');
+  dl(new Blob([csv], { type: 'text/csv' }), 'abstracts.csv');
+});
+
+function dl(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+</script>
+</body>
+</html>

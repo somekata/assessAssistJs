@@ -1,269 +1,444 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>学会審査アシスタント</title>
-    <link rel="stylesheet" href="css/style.css" />
-    <link rel="stylesheet" href="css/topbutton.css" />
-  </head>
-  <body>
-    <header>
-      <div class="left">
-        <h1>学会審査アシスタント</h1>
-        <p class="small">
-          1. 事務局から渡された data.csv（演題一覧）を下で読み込み<br />
-          2. 演題ごとに1〜5で採点＋コメント<br />
-          3.
-          「評価を確定」で青ロック、最終的に「CSVダウンロード」で提出用ファイルを作成<br /><br />
-          色の意味：<br />
-          <span class="red">赤</span>＝未着手（まだ保存していない） /
-          <span class="yellow">黄</span>＝保存済み未確定 /
-          <span class="blue">青</span>＝確定済み
-        </p>
-        <p class="small">
-          <button onclick="window.open('instruction.html', '_blank')">
-            使い方・サンプル
-          </button>
-        </p>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抄録査読システム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f1e8;
+  --paper: #fdfaf3;
+  --ink: #1a1a1a;
+  --accent: #2a5c8a;
+  --accent-dark: #1a3d5c;
+  --accent2: #c8741a;
+  --border: #d4cbb8;
+  --muted: #7a7060;
+  --success: #2d7a4f;
+  --shadow: 0 4px 20px rgba(0,0,0,0.10);
+  --shadow-hover: 0 8px 32px rgba(0,0,0,0.16);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Noto Sans JP', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HERO ── */
+.hero {
+  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 60%, #3a7ab0 100%);
+  color: #fff;
+  padding: 3.5rem 2rem 2.8rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.hero-icon { font-size: 3rem; margin-bottom: .8rem; animation: fadeDown .5s ease both; }
+.hero h1 {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  margin-bottom: .5rem;
+  animation: fadeDown .55s .05s ease both;
+}
+.hero p {
+  font-size: .9rem;
+  opacity: .8;
+  letter-spacing: .03em;
+  animation: fadeDown .6s .1s ease both;
+}
+
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── MAIN ── */
+main {
+  flex: 1;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 2.5rem 1.5rem 3rem;
+}
+
+/* ── TOOL CARDS ── */
+.tools-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem;
+  margin-bottom: 3rem;
+}
+@media (max-width: 580px) { .tools-grid { grid-template-columns: 1fr; } }
+
+.tool-card {
+  background: var(--paper);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow .2s, transform .2s;
+  display: flex;
+  flex-direction: column;
+  animation: fadeUp .5s ease both;
+}
+.tool-card:nth-child(2) { animation-delay: .08s; }
+.tool-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-3px);
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tool-card-header {
+  padding: 1.4rem 1.4rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .2rem .6rem;
+  border-radius: 20px;
+  margin-bottom: .7rem;
+}
+.badge-review { background: #e8f0f8; color: var(--accent); }
+.badge-agg    { background: #fef3e8; color: var(--accent2); }
+
+.tool-icon { font-size: 2rem; margin-bottom: .5rem; display: block; }
+.tool-card h2 {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: .4rem;
+  color: var(--ink);
+}
+.tool-card p {
+  font-size: .82rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.tool-card-body {
+  padding: 1rem 1.4rem;
+  flex: 1;
+}
+.tool-features {
+  list-style: none;
+  margin-bottom: .8rem;
+}
+.tool-features li {
+  font-size: .8rem;
+  color: var(--muted);
+  padding: .2rem 0;
+  display: flex;
+  align-items: flex-start;
+  gap: .4rem;
+}
+.tool-features li::before { content: '✓'; color: var(--success); font-weight: 700; flex-shrink: 0; }
+
+.tool-card-footer {
+  padding: 1rem 1.4rem 1.4rem;
+}
+.tool-link {
+  display: block;
+  text-align: center;
+  padding: .65rem 1rem;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: .88rem;
+  text-decoration: none;
+  transition: opacity .15s, transform .1s;
+}
+.tool-link:active { transform: scale(.97); }
+.tool-link:hover { opacity: .85; }
+.link-review  { background: var(--accent);  color: #fff; }
+.link-agg     { background: var(--accent2); color: #fff; }
+
+/* ── HOW-TO ── */
+.howto { animation: fadeUp .5s .18s ease both; }
+.howto h3 {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 2rem;
+  position: relative;
+}
+.flow::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 36px;
+  bottom: 36px;
+  width: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.flow-step {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .9rem 1.1rem;
+  margin-bottom: .6rem;
+  position: relative;
+  z-index: 1;
+}
+.step-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: .88rem;
+  flex-shrink: 0;
+  color: #fff;
+}
+.step-review  { background: var(--accent); }
+.step-agg     { background: var(--accent2); }
+.step-both    { background: var(--success); }
+
+.step-body { flex: 1; }
+.step-title { font-weight: 700; font-size: .88rem; margin-bottom: .2rem; }
+.step-desc  { font-size: .8rem; color: var(--muted); line-height: 1.65; }
+.step-tag {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .1rem .45rem;
+  border-radius: 3px;
+  margin-bottom: .3rem;
+}
+.tag-review  { background: #e8f0f8; color: var(--accent); }
+.tag-agg     { background: #fef3e8; color: var(--accent2); }
+
+/* ── NOTES ── */
+.notes {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent2);
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.2rem;
+  font-size: .8rem;
+  color: var(--muted);
+  line-height: 1.8;
+  animation: fadeUp .5s .22s ease both;
+}
+.notes strong { color: var(--ink); }
+
+/* ── FOOTER ── */
+footer {
+  background: #2c2c2c;
+  color: #999;
+  font-size: .7rem;
+  text-align: center;
+  padding: .8rem 1.5rem;
+  line-height: 1.8;
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">📋</div>
+  <h1>抄録査読システム</h1>
+  <p>評価者による査読から事務局集計まで、一貫してサポートします</p>
+</div>
+
+<main>
+
+  <!-- TOOL CARDS -->
+  <div class="tools-grid">
+
+    <div class="tool-card">
+      <div class="tool-card-header">
+        <span class="tool-badge badge-review">📝 評価者向け</span>
+        <span class="tool-icon">📋</span>
+        <h2>抄録査読支援ツール</h2>
+        <p>PDFを読み込んで演題ごとに評価・コメントを記録します。</p>
       </div>
-
-      <div class="right">
-        <div class="import-block">
-          <label class="import-label">
-            data.csvを読み込む：
-            <input type="file" id="csvInput" accept=".csv,text/csv" />
-          </label>
-          <div id="loadStatus" class="load-status">
-            （まだ読み込まれていません）
-          </div>
-        </div>
-
-        <label class="reviewer-label">
-          審査者名：
-          <input type="text" id="reviewerName" placeholder="例：Reviewer_03" />
-        </label>
-      </div>
-    </header>
-
-    <main>
-      <!-- 左カラム：演題一覧とナビ -->
-      <aside class="paper-list-panel">
-        <div class="nav-block">
-          <button id="prevBtn">&larr; 前へ</button>
-          <span id="currentIndexInfo">0 / 0</span>
-          <button id="nextBtn">次へ &rarr;</button>
-        </div>
-
-        <div class="list-search-block">
-          <input
-            type="text"
-            id="searchBox"
-            placeholder="タイトル・要旨で検索…"
-          />
-        </div>
-
-        <ul id="paperList" class="paper-list">
-          <!-- JavaScriptで挿入 -->
+      <div class="tool-card-body">
+        <ul class="tool-features">
+          <li>抄録PDFを読み込み、前へ・次へで快適に移動</li>
+          <li>★1〜5の5段階評価＋確定機能</li>
+          <li>基礎・臨床の区分設定（個別・一括）</li>
+          <li>定型文コメント入力（19件プリセット済み）</li>
+          <li>キーボードショートカット対応</li>
+          <li>データはJSONで保存・エクスポート</li>
         </ul>
-      </aside>
+      </div>
+      <div class="tool-card-footer">
+        <a class="tool-link link-review" href="abstract_review.html">査読ツールを開く →</a>
+      </div>
+    </div>
 
-      <!-- 右カラム：詳細・採点フォーム -->
-      <section class="detail-panel">
-        <div class="paper-header">
-          <span class="paper-id" id="paperId"></span>
-          <span id="paperSection" class="paper-section"></span>
-          <h2 id="paperTitle"></h2>
-        </div>
+    <div class="tool-card">
+      <div class="tool-card-header">
+        <span class="tool-badge badge-agg">📊 事務局向け</span>
+        <span class="tool-icon">📊</span>
+        <h2>査読集計ツール</h2>
+        <p>評価者のJSONをまとめて読み込み、平均点・順位を集計します。</p>
+      </div>
+      <div class="tool-card-body">
+        <ul class="tool-features">
+          <li>複数の評価者JSONを一括読み込み</li>
+          <li>確定済み評価のみを集計対象に</li>
+          <li>基礎・臨床の区分別順位付け</li>
+          <li>評価者ごとのコメントをモーダル表示</li>
+          <li>評価者別統計・スコア分布グラフ</li>
+          <li>集計結果をCSVエクスポート</li>
+        </ul>
+      </div>
+      <div class="tool-card-footer">
+        <a class="tool-link link-agg" href="abstract_aggregate.html">集計ツールを開く →</a>
+      </div>
+    </div>
 
-        <div class="abstract-block">
-          <h3>抄録 / Abstract</h3>
-          <div class="abstract-text" id="paperAbstract">
-            data.csvを読み込むと、ここに抄録が表示されます。
+  </div>
+
+  <!-- HOWTO -->
+  <div class="howto">
+    <h3>🚀 操作の流れ</h3>
+
+    <div class="flow">
+
+      <div class="flow-step">
+        <div class="step-num step-review">1</div>
+        <div class="step-body">
+          <div class="step-tag tag-review">査読ツール</div>
+          <div class="step-title">PDFを読み込む</div>
+          <div class="step-desc">
+            ヘッダーの「📂 PDFを読み込む」から抄録PDFを選択します。<br>
+            <strong>1ページ1演題形式</strong>のPDFに対応しています（1行目：演題番号、2行目：タイトル、3行目以降：本文）。
           </div>
         </div>
+      </div>
 
-        <div class="rating-block">
-          <h3>この演題の評価</h3>
-
-          <div class="score-row">
-            <div class="score-label">スコア (1〜5)：</div>
-            <div class="score-buttons">
-              <button class="score-btn" data-score="1">1</button>
-              <button class="score-btn" data-score="2">2</button>
-              <button class="score-btn" data-score="3">3</button>
-              <button class="score-btn" data-score="4">4</button>
-              <button class="score-btn" data-score="5">5</button>
-              <!--採点しない機能は正常に作動しないため保留
-              <button class="score-btn score-btn-no" data-score="0">
-                採点しない
-              </button>
-              -->
-            </div>
-            <div class="current-score">
-              選択中: <span id="currentScoreDisplay">-</span>
-            </div>
-          </div>
-
-          <div class="comment-row">
-            <label for="commentInput">コメント：</label>
-            <textarea
-              id="commentInput"
-              rows="4"
-              placeholder="例：新規性は高いが、方法の説明が不足していると感じた。"
-            ></textarea>
-            <!-- ▼ 定型文アシスタント -->
-            <label for="comment-assist-row">定型文挿入</label>
-            <div id="comment-assist-row">
-              <select id="commentPresetSelect">
-                <option value="">（定型コメントを選択）</option>
-                <!-- script.js側でcomment.jsonから埋める -->
-              </select>
-              <button
-                id="addCommentPresetBtn"
-                type="button"
-                class="secondary small-btn"
-              >
-                追加
-              </button>
-            </div>
-            <div class="comment-assist-hint small-hint">
-              定型コメントを選んで「追加」を押すと、上のコメント欄の末尾に追記されます。自由に編集できます。
-            </div>
-            <!-- ▲ 定型文アシスタント -->
-          </div>
-
-          <div class="action-row">
-            <div class="action-buttons">
-              <button id="saveBtn" class="primary">評価を保存</button>
-              <button id="finalizeBtn" class="primary finalize">
-                評価を確定
-              </button>
-              <button id="unfinalizeBtn" class="secondary">未確定に戻す</button>
-            </div>
-
-            <div class="action-notes small">
-              「評価を保存」で黄色に、「評価を確定」で青になります。<br />
-              「未確定に戻す」で青→黄に戻せます。<br />
-              修正したら必ずもう一度「評価を保存」してください。<br /><br />
-              <span id="saveStatus" class="save-status"></span>
-            </div>
+      <div class="flow-step">
+        <div class="step-num step-review">2</div>
+        <div class="step-body">
+          <div class="step-tag tag-review">査読ツール</div>
+          <div class="step-title">設定タブで評価者名を入力</div>
+          <div class="step-desc">
+            「⚙️ 設定」タブ → 「👤 評価者情報」セクションに氏名を入力します。JSONエクスポート時のファイル名に反映されます。
           </div>
         </div>
+      </div>
 
-        <div class="stats-block">
-          <h3>あなたの採点状況</h3>
-
-          <!-- スコア分布 -->
-          <div class="stats-row">
-            <div class="stat-item">★1: <span id="count1">0</span></div>
-            <div class="stat-item">★2: <span id="count2">0</span></div>
-            <div class="stat-item">★3: <span id="count3">0</span></div>
-            <div class="stat-item">★4: <span id="count4">0</span></div>
-            <div class="stat-item">★5: <span id="count5">0</span></div>
-            <!--採点しない機能は正常に作動しないため保留
-            <div class="stat-item">
-              採点しない: <span id="countNone">0</span>
-            </div>
-            -->
-          </div>
-
-          <!-- 進捗サマリ（赤/黄/青） -->
-          <div class="progress-row">
-            <div class="stat-item progress-red">
-              未着手: <span id="countNotStarted">0</span>
-            </div>
-            <div class="stat-item progress-yellow">
-              途中: <span id="countInProgress">0</span>
-            </div>
-            <div class="stat-item progress-blue">
-              確定: <span id="countFinalized">0</span>
-            </div>
-          </div>
-
-          <div class="export-row">
-            <button id="downloadBtn" class="secondary">CSVダウンロード</button>
-            <button id="resetBtn" class="danger">全データ初期化</button>
-            <p
-              style="
-                margin-top: 12px;
-                font-size: 0.8rem;
-                color: #b71c1c;
-                background: #fff3f3;
-                border: 1px solid #f5b7b7;
-                border-radius: 6px;
-                padding: 8px 12px;
-              "
-            >
-              ⚠️ <strong>注意：</strong> localStorage
-              に前回の採点データが残っている場合があります。<br />
-              新しい採点を始める前に、<strong>「全データ初期化」</strong>を一度実行してから採点を行ってください。
-            </p>
+      <div class="flow-step">
+        <div class="step-num step-review">3</div>
+        <div class="step-body">
+          <div class="step-tag tag-review">査読ツール</div>
+          <div class="step-title">演題を評価する</div>
+          <div class="step-desc">
+            前へ・次へボタン（または ← → キー）で演題を移動しながら評価します。<br>
+            ★1〜5でスコアを付け（数字キー 1〜5）、区分（B/Cキー）・コメントを入力、最後に「✅ 確定」（Enterキー）を押します。<br>
+            確定後は再編集できません。取り消すには「↩ 未確定に戻す」（Backspaceキー）を使います。
           </div>
         </div>
-      </section>
-    </main>
-    <!--
-    ====== マニュアルはinstruction.htmlに移動したため以下削除 ======
-    <section class="manual">
-      <strong>審査員用マニュアル：</strong><br />
-      <a
-        href="instructionForReviewer.html"
-        target="_blank"
-        style="color: #2d3e50; font-weight: 600; text-decoration: underline"
-      >
-        instructionForReviewer.html を開く </a
-      ><br />
-      ツールの使い方・提出方法はこちらをご確認ください。
-    </section>
-    <section class="manual">
-      <strong>管理者用マニュアル：</strong><br />
-      <a
-        href="instructionForManager.html"
-        target="_blank"
-        style="color: #2d3e50; font-weight: 600; text-decoration: underline"
-      >
-        instructionForManager.html を開く </a
-      ><br />
-      管理者向けの注意事項を記載しています。
-    </section>
-    <section class="manual">
-      <strong>sample.csv：</strong><br />
-      <a
-        href="sample.csv"
-        style="color: #2d3e50; font-weight: 600; text-decoration: underline"
-      >
-        sample.csv をダウンロードする </a
-      ><br />
-      sampleデータです。テンプレートとしても使用できます。<br />
-      エクセルで開くと文字化けすることがあります。<br />
-      メモ帳等のテキストエディタで開くか、読み込み時にエンコードを「UTF-8」で指定してください。<br />
-      また、VSCode等のエディタで開くと、エラーの確認をしながら入力することができます。<br />
-      入力方法は instructionForManager.html をご参照ください。
-    </section>
-    <footer>
-      <small>
-        ・このアプリはローカルでのみ動作します。サーバー送信なし。<br />
-        ・事務局から配布された data.csv
-        は機密扱いです。GitHub等にアップロードしないでください。<br />
-        ・採点内容はこのPCのブラウザ(localStorage)にのみ保存されます。<br />
-        ・「全データ初期化」でこのPC上の採点履歴（全演題分）を削除できます。<br />
-        ・ChatGPTを利用してプログラムを行っています。
-      </small>
-    </footer>
-    ====== 削除ここまで ======
-    -->
+      </div>
 
-    <!--主なscript-->
-    <script src="js/storage.js" defer></script>
-    <script src="js/csv.js" defer></script>
-    <script src="js/ui.js" defer></script>
-    <script src="js/reviewLogic.js" defer></script>
-    <script src="js/comments.js" defer></script>
-    <script src="js/main.js" defer></script>
+      <div class="flow-step">
+        <div class="step-num step-review">4</div>
+        <div class="step-body">
+          <div class="step-tag tag-review">査読ツール</div>
+          <div class="step-title">JSONをエクスポートして提出</div>
+          <div class="step-desc">
+            「⚙️ 設定」タブ → 「📤 JSONエクスポート」でデータを保存し、事務局に提出します。<br>
+            ブラウザを閉じても localStorage にデータが残るので、途中再開も可能です。
+          </div>
+        </div>
+      </div>
 
-    <!--TOP button-->
-    <div id="scroll-progress-pie"></div>
-    <script src="js/topbutton.js" defer></script>
-  </body>
+      <div class="flow-step">
+        <div class="step-num step-agg">5</div>
+        <div class="step-body">
+          <div class="step-tag tag-agg">集計ツール</div>
+          <div class="step-title">評価者JSONをまとめて読み込む</div>
+          <div class="step-desc">
+            集計ツールの「📂 読み込み」タブで、評価者全員分のJSONをまとめてドロップします。<br>
+            評価者カードで読み込み状況（確定済み件数）を確認できます。
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num step-agg">6</div>
+        <div class="step-body">
+          <div class="step-tag tag-agg">集計ツール</div>
+          <div class="step-title">集計を実行して結果を確認</div>
+          <div class="step-desc">
+            「集計を実行」ボタンで、演題ごとの平均点・区分別順位が自動算出されます。<br>
+            「📋 集計結果」タブで絞り込み・並び替えができ、コメントはモーダルで一覧確認できます。<br>
+            「📈 統計」タブで評価者ごとの傾向・スコア分布を確認できます。
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num step-both">7</div>
+        <div class="step-body">
+          <div class="step-tag" style="background:#e8f5ee;color:var(--success);">集計ツール</div>
+          <div class="step-title">CSVエクスポートで完了</div>
+          <div class="step-desc">
+            ヘッダー右上の「📥 CSVエクスポート」で集計結果をCSVとして保存します。<br>
+            列構成：順位（区分別）・演題番号・タイトル・区分・平均点・評価者数・評価者別スコア・評価者別コメント
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="notes">
+      <strong>⚠️ 注意事項</strong><br>
+      ・すべての処理はブラウザ内で完結します。データが外部に送信されることはありません。<br>
+      ・査読ツールのデータはブラウザの localStorage に保存されます。ブラウザのキャッシュ削除・異なるブラウザでは引き継がれません。長期保存にはJSONエクスポートをご利用ください。<br>
+      ・3つのファイル（index.html・abstract_review.html・abstract_aggregate.html）は同じフォルダに置いてください。
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  本ツールはAI（Claude, Anthropic）を用いて作成されました。内容には誤りが含まれる可能性があります。<br>
+  医療上の判断には必ず公式の教科書・文献・専門家の指導を参照してください。<br>
+  二次利用・再配布は自己責任のもとで可能です。その際、本注記の保持を推奨します。
+</footer>
+
+</body>
 </html>
