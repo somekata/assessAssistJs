@@ -290,15 +290,6 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
             </div>
             <div id="scoreLabel">未評価</div>
           </div>
-          <!-- status -->
-          <div class="pane-section">
-            <div class="pane-label">ステータス</div>
-            <div class="status-btns">
-              <button class="status-btn" id="btnTodo">途中</button>
-              <button class="status-btn" id="btnConfirm">✅ 確定</button>
-              <button class="status-btn" id="btnUnconfirm">↩ 未確定に戻す</button>
-            </div>
-          </div>
           <!-- category -->
           <div class="pane-section">
             <div class="pane-label">区分</div>
@@ -318,6 +309,15 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
             <br><br>
             <textarea id="commentBox" placeholder="コメントを入力..."></textarea>
             <div id="saveIndicator"></div>
+          </div>
+          <!-- status -->
+          <div class="pane-section">
+            <div class="pane-label">ステータス</div>
+            <div class="status-btns">
+              <button class="status-btn" id="btnTodo">途中</button>
+              <button class="status-btn" id="btnConfirm">✅ 確定</button>
+              <button class="status-btn" id="btnUnconfirm">↩ 未確定に戻す</button>
+            </div>
           </div>
         </div>
       </div>
@@ -573,6 +573,7 @@ if (pdfDropZone) {
   pdfDropZone.addEventListener('dragleave', () => { pdfDropZone.style.borderColor = ''; pdfDropZone.style.background = ''; });
   pdfDropZone.addEventListener('drop', e => {
     e.preventDefault();
+    e.stopPropagation();
     pdfDropZone.style.borderColor = ''; pdfDropZone.style.background = '';
     loadPdfFile(e.dataTransfer.files[0]);
   });
