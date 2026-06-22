@@ -553,15 +553,42 @@ async function loadPdfFile(file) {
     );
     const nonEmpty = lines.map(l => l.trim()).filter(l => l.length > 0);
     if (nonEmpty.length === 0) continue;
+
+    // 抄録本文の開始パターン（【背景】【目的】【方法】など、または「抄録：」）
+    const abstractStartRe = /^(【|抄録[：:。]|背景|目的|方法|はじめに|緒言|Introduction|Background|Objective)/;
+    const number = nonEmpty[0] || '';
+    let titleLines = [];
+    let abstractLines = [];
+    let inAbstract = false;
+    let autoCategory = '';
+    for (let j = 1; j < nonEmpty.length; j++) {
+      const line = nonEmpty[j];
+      // 「基礎/臨床の自己申告：」行はcategory自動設定に使い、本文からは除外
+      const catMatch = line.match(/^基礎[\/／]臨床の自己申告[：:]\s*(.+)/);
+      if (catMatch) {
+        const val = catMatch[1].trim();
+        if (/^臨床/.test(val)) autoCategory = 'clinical';
+        else if (/^基礎/.test(val)) autoCategory = 'basic';
+        break;
+      }
+      if (!inAbstract && abstractStartRe.test(line)) {
+        inAbstract = true;
+      }
+      if (inAbstract) {
+        abstractLines.push(line);
+      } else {
+        titleLines.push(line);
+      }
+    }
     abstracts.push({
       page: i,
-      number: nonEmpty[0] || '',
-      title: nonEmpty[1] || '',
-      abstract: nonEmpty.slice(2).join('\n').trim(),
+      number,
+      title: titleLines.join('') || '',
+      abstract: abstractLines.join('\n').trim(),
       score: null,
       comment: '',
       status: 'untouched',
-      category: ''
+      category: autoCategory
     });
   }
 
