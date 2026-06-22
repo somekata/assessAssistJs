@@ -71,6 +71,10 @@ nav.tabs{background:#1e4a70;display:flex;gap:0;flex-shrink:0;}
 .cat-badge.basic{background:#ede8ff;color:var(--basic-color);}
 .cat-badge.clinical{background:#e0f4ee;color:var(--clinical-color);}
 .cat-badge.unset{background:#eee;color:var(--muted);}
+.self-declared{font-size:.68rem;color:var(--muted);padding:.12rem .45rem;border-radius:4px;border:1px dashed var(--border);white-space:nowrap;}
+.self-declared.basic{border-color:var(--basic-color);color:var(--basic-color);background:#f5f2ff;}
+.self-declared.clinical{border-color:var(--clinical-color);color:var(--clinical-color);background:#f0faf5;}
+.self-declared.mismatch{font-weight:700;}
 .abstract-title{font-size:1rem;font-weight:700;line-height:1.5;color:var(--ink);}
 .abstract-text{font-size:.88rem;line-height:1.9;color:#2c2c2c;white-space:pre-wrap;background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:.9rem 1rem;}
 
@@ -152,6 +156,9 @@ tr.confirmed-row td{background:#f0faf5;}
 .tbl-cat.basic{background:#ede8ff;color:var(--basic-color);}
 .tbl-cat.clinical{background:#e0f4ee;color:var(--clinical-color);}
 .tbl-cat.unset{background:#eee;color:var(--muted);}
+.tbl-self{font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px dashed var(--border);color:var(--muted);}
+.tbl-self.basic{border-color:var(--basic-color);color:var(--basic-color);}
+.tbl-self.clinical{border-color:var(--clinical-color);color:var(--clinical-color);}
 .tbl-star{color:var(--star-color);white-space:nowrap;}
 .tbl-status{font-size:.72rem;font-weight:700;white-space:nowrap;}
 .status-confirmed{color:var(--success);}
@@ -276,6 +283,7 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
           <div class="abstract-meta">
             <span class="abstract-num" id="abNum">-</span>
             <span class="cat-badge unset" id="abCat">未分類</span>
+            <span class="self-declared" id="abSelfDeclared" style="display:none;"></span>
           </div>
           <div class="abstract-title" id="abTitle">-</div>
           <div class="abstract-text" id="abText"></div>
@@ -588,7 +596,8 @@ async function loadPdfFile(file) {
       score: null,
       comment: '',
       status: 'untouched',
-      category: autoCategory
+      category: autoCategory,
+      selfDeclaredCategory: autoCategory
     });
   }
 
@@ -647,6 +656,22 @@ function renderReview() {
   const catEl = document.getElementById('abCat');
   catEl.className = 'cat-badge ' + (a.category === 'basic' ? 'basic' : a.category === 'clinical' ? 'clinical' : 'unset');
   catEl.textContent = a.category === 'basic' ? '基礎' : a.category === 'clinical' ? '臨床' : '未分類';
+
+  // 自己申告バッジ
+  const sdEl = document.getElementById('abSelfDeclared');
+  const sd = a.selfDeclaredCategory || '';
+  if (sd) {
+    const sdLabel = sd === 'basic' ? '基礎' : sd === 'clinical' ? '臨床' : '';
+    const mismatch = sd !== a.category;
+    sdEl.style.display = '';
+    sdEl.className = 'self-declared ' + sd + (mismatch ? ' mismatch' : '');
+    sdEl.textContent = '自己申告：' + sdLabel + (mismatch ? ' ⚠' : '');
+    sdEl.title = mismatch
+      ? '査読者による変更あり（自己申告：' + sdLabel + '）'
+      : '自己申告と一致';
+  } else {
+    sdEl.style.display = 'none';
+  }
 
   // stars
   document.querySelectorAll('.star-btn').forEach(b => {
@@ -870,6 +895,12 @@ function renderList() {
 
     const catLabel = cat === 'basic' ? '基礎' : cat === 'clinical' ? '臨床' : '未分類';
     const catCls = cat === 'basic' ? 'basic' : cat === 'clinical' ? 'clinical' : 'unset';
+    const sd = a.selfDeclaredCategory || '';
+    const sdLabel = sd === 'basic' ? '基礎' : sd === 'clinical' ? '臨床' : '';
+    const sdMismatch = sd && sd !== cat;
+    const sdBadge = sd
+      ? '<span class="tbl-self '+sd+'" title="自己申告：'+sdLabel+(sdMismatch?' (変更あり)':'')+'">申：'+sdLabel+(sdMismatch?' ⚠':'')+'</span>'
+      : '';
     const starsStr = a.score ? '★'.repeat(a.score) + '☆'.repeat(5 - a.score) : '—';
     const statusLabel = a.status === 'confirmed' ? '<span class="tbl-status status-confirmed">✅ 確定</span>'
                       : a.status === 'todo' ? '<span class="tbl-status status-todo">⏳ 途中</span>'
@@ -880,7 +911,7 @@ function renderList() {
       '<td><input type="checkbox" class="row-check" data-i="'+i+'"></td>'+
       '<td class="tbl-num">'+escHtml(a.number)+'</td>'+
       '<td class="tbl-title" title="'+escHtml(a.title)+'">'+escHtml(a.title)+'</td>'+
-      '<td><span class="tbl-cat '+catCls+'">'+catLabel+'</span></td>'+
+      '<td><span class="tbl-cat '+catCls+'">'+catLabel+'</span> '+sdBadge+'</td>'+
       '<td class="tbl-star">'+starsStr+'</td>'+
       '<td>'+statusLabel+'</td>'+
       '<td style="font-size:.75rem;color:var(--muted);">'+escHtml(comment)+'</td>'+
