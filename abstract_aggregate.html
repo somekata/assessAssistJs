@@ -91,6 +91,7 @@ tr:hover td{background:#f0ece0;}
 .cat-tag{font-size:.72rem;font-weight:700;padding:.1rem .45rem;border-radius:3px;}
 .cat-tag.basic{background:#ede8ff;color:var(--basic);}
 .cat-tag.clinical{background:#e0f4ee;color:var(--clinical);}
+.cat-adopted{outline:2px solid var(--accent);outline-offset:1px;}
 .cat-tag.unset{background:#eee;color:var(--muted);}
 
 .stars-disp{color:var(--star);}
@@ -196,7 +197,8 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
       </select>
       <input type="text" id="resultSearch" placeholder="演題番号・タイトルで絞り込み...">
       <select id="sortKey">
-        <option value="rank">順位順</option>
+        <option value="rank">順位順（区分別）</option>
+        <option value="rankOverall">順位順（全体）</option>
         <option value="num">演題番号順</option>
         <option value="avg_desc">平均点↓</option>
         <option value="avg_asc">平均点↑</option>
@@ -211,10 +213,12 @@ footer{background:#2c2c2c;color:#999;font-size:.7rem;text-align:center;padding:.
       <table id="resultTable" style="display:none;">
         <thead>
           <tr>
-            <th>順位</th>
+            <th>順位<br>（区分別／自己申告）</th>
+            <th>順位<br>（全体）</th>
             <th>演題番号</th>
             <th>タイトル</th>
-            <th>区分</th>
+            <th>区分<br>（自己申告）</th>
+            <th>区分<br>（変更）</th>
             <th>平均点</th>
             <th>評価者数</th>
             <th>評価詳細</th>
@@ -362,18 +366,21 @@ document.getElementById('btnAggregate').addEventListener('click', () => {
 
 function aggregate() {
   // 演題番号ごとにマージ
-  const map = new Map(); // number -> { number, title, category, reviewerScores: {name: {score,comment}} }
+  // number -> { number, title, categoryByReviewer:{name:cat}, reviewerScores:{name:{score,comment}} }
+  const map = new Map();
 
   Object.entries(reviewers).forEach(([rName, abs]) => {
     abs.forEach(a => {
       const key = a.number;
       if (!map.has(key)) {
-        map.set(key, { number: a.number, title: a.title, category: a.category || '', reviewerScores: {} });
+        map.set(key, { number: a.number, title: a.title, categoryByReviewer: {}, reviewerScores: {} });
       }
       const entry = map.get(key);
-      // タイトル・区分：後勝ち
+      // タイトル：後勝ち
       if (a.title) entry.title = a.title;
-      if (a.category) entry.category = a.category;
+      // 区分：評価者ごとに記録（自己申告後に区分が変更されているケースを検知するため）
+      const cat = a.category || '';
+      if (cat) entry.categoryByReviewer[rName] = cat;
       entry.reviewerScores[rName] = { score: a.score, comment: a.comment || '' };
     });
   });
@@ -383,13 +390,40 @@ function aggregate() {
   aggregated = [...map.values()].map(entry => {
     const scores = Object.values(entry.reviewerScores).map(r => r.score).filter(s => s !== null && s !== undefined);
     const avg = scores.length > 0 ? scores.reduce((a,b)=>a+b,0) / scores.length : null;
-    return { ...entry, avg, evalCount: scores.length, allReviewers };
+
+    // 区分の履歴：評価者の読み込み順で最初に記録された値を「自己申告区分」とし、
+    // それ以降に異なる値が記録されていれば「変更」として値ごとに件数・評価者名を保持する
+    const order = allReviewers.filter(rn => entry.categoryByReviewer[rn]);
+    const selfCategory = order.length > 0 ? entry.categoryByReviewer[order[0]] : '';
+    const changesByValue = {}; // 変更後の値 -> [評価者名, ...]
+    for (let i = 1; i < order.length; i++) {
+      const rn = order[i];
+      const c = entry.categoryByReviewer[rn];
+      if (c !== selfCategory) {
+        (changesByValue[c] = changesByValue[c] || []).push(rn);
+      }
+    }
+    const changeValues = Object.keys(changesByValue);
+    const changeCount = changeValues.reduce((s, v) => s + changesByValue[v].length, 0);
+
+    // 参考用の「最新記録区分」：変更後の値が1種類のみならそれを、
+    // 複数の異なる変更値が混在する場合は最後に記録された値（最新）を保持する。
+    // ※ 区分別順位・フィルタ・統計は自己申告区分（selfCategory）を用いるため、
+    //   この値はランキング等には使用しない（表示・CSV参考用のみ）。
+    let category = selfCategory;
+    if (changeValues.length === 1) {
+      category = changeValues[0];
+    } else if (changeValues.length > 1) {
+      category = order.length > 0 ? entry.categoryByReviewer[order[order.length - 1]] : selfCategory;
+    }
+
+    return { ...entry, avg, evalCount: scores.length, allReviewers, category, selfCategory, changesByValue, changeCount };
   });
 
-  // 区分別順位付け
+  // ---- 区分別順位付け（自己申告区分でグループ化） ----
   const groups = { basic: [], clinical: [], '': [] };
   aggregated.forEach(a => {
-    const g = a.category === 'basic' ? 'basic' : a.category === 'clinical' ? 'clinical' : '';
+    const g = a.selfCategory === 'basic' ? 'basic' : a.selfCategory === 'clinical' ? 'clinical' : '';
     groups[g].push(a);
   });
   Object.values(groups).forEach(group => {
@@ -401,17 +435,32 @@ function aggregate() {
       if (b.avg !== a.avg) return b.avg - a.avg;
       return a.number.localeCompare(b.number, 'ja');
     });
-    let rank = 1;
     group.forEach((a, i) => {
       if (a.avg === null) { a.rank = null; return; }
-      // 同点は同順位
+      // 同点は同順位（標準競技順位：1,1,4,4,6...）
       if (i > 0 && a.avg === group[i-1].avg) {
         a.rank = group[i-1].rank;
       } else {
-        a.rank = rank;
+        a.rank = i + 1;
       }
-      rank++;
     });
+  });
+
+  // ---- 全体順位付け（区分を問わず全演題内での順位） ----
+  const overallList = [...aggregated].sort((a,b) => {
+    if (a.avg === null && b.avg === null) return 0;
+    if (a.avg === null) return 1;
+    if (b.avg === null) return -1;
+    if (b.avg !== a.avg) return b.avg - a.avg;
+    return a.number.localeCompare(b.number, 'ja');
+  });
+  overallList.forEach((a, i) => {
+    if (a.avg === null) { a.overallRank = null; return; }
+    if (i > 0 && a.avg === overallList[i-1].avg) {
+      a.overallRank = overallList[i-1].overallRank;
+    } else {
+      a.overallRank = i + 1;
+    }
   });
 }
 
@@ -422,9 +471,9 @@ function renderResult() {
   const sortKey = document.getElementById('sortKey').value;
 
   let rows = aggregated.filter(a => {
-    if (fCat === 'basic' && a.category !== 'basic') return false;
-    if (fCat === 'clinical' && a.category !== 'clinical') return false;
-    if (fCat === 'unset' && a.category !== '') return false;
+    if (fCat === 'basic' && a.selfCategory !== 'basic') return false;
+    if (fCat === 'clinical' && a.selfCategory !== 'clinical') return false;
+    if (fCat === 'unset' && a.selfCategory !== '') return false;
     if (q && !a.number.toLowerCase().includes(q) && !a.title.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -434,6 +483,12 @@ function renderResult() {
     if (sortKey === 'rank') {
       // 区分別rank比較
       const ra = a.rank ?? 9999, rb = b.rank ?? 9999;
+      if (ra !== rb) return ra - rb;
+      return a.number.localeCompare(b.number,'ja');
+    }
+    if (sortKey === 'rankOverall') {
+      // 全体rank比較
+      const ra = a.overallRank ?? 9999, rb = b.overallRank ?? 9999;
       if (ra !== rb) return ra - rb;
       return a.number.localeCompare(b.number,'ja');
     }
@@ -458,16 +513,35 @@ function renderResult() {
   rows.forEach(a => {
     const tr = document.createElement('tr');
 
-    // 順位バッジ
+    // 順位バッジ（区分別）
     const rankCls = a.rank === 1 ? 'rank-1' : a.rank === 2 ? 'rank-2' : a.rank === 3 ? 'rank-3' : 'rank-n';
     const rankHtml = a.rank != null
       ? '<span class="rank-badge ' + rankCls + '">' + a.rank + '</span>'
       : '<span class="rank-badge rank-n">—</span>';
 
-    // 区分タグ
-    const catCls = a.category === 'basic' ? 'basic' : a.category === 'clinical' ? 'clinical' : 'unset';
-    const catLabel = a.category === 'basic' ? '基礎' : a.category === 'clinical' ? '臨床' : '未分類';
-    const catHtml = '<span class="cat-tag ' + catCls + '">' + catLabel + '</span>';
+    // 順位バッジ（全体）
+    const orankCls = a.overallRank === 1 ? 'rank-1' : a.overallRank === 2 ? 'rank-2' : a.overallRank === 3 ? 'rank-3' : 'rank-n';
+    const orankHtml = a.overallRank != null
+      ? '<span class="rank-badge ' + orankCls + '">' + a.overallRank + '</span>'
+      : '<span class="rank-badge rank-n">—</span>';
+
+    // 区分（自己申告）：評価者読み込み順で最初に記録された値
+    const selfCatCls = a.selfCategory === 'basic' ? 'basic' : a.selfCategory === 'clinical' ? 'clinical' : 'unset';
+    const selfCatLabel = a.selfCategory === 'basic' ? '基礎' : a.selfCategory === 'clinical' ? '臨床' : '未分類';
+    const selfCatHtml = '<span class="cat-tag ' + selfCatCls + '">' + selfCatLabel + '</span>';
+
+    // 区分（変更）：自己申告と異なる値ごとに件数・変更した評価者名を表示
+    // 集計・順位付けに採用された値には枠を付けて強調
+    let changeHtml = '<span class="no-comment">変更なし</span>';
+    if (a.changeCount > 0) {
+      changeHtml = Object.entries(a.changesByValue).map(([val, names]) => {
+        const cls = val === 'basic' ? 'basic' : val === 'clinical' ? 'clinical' : 'unset';
+        const label = val === 'basic' ? '基礎' : val === 'clinical' ? '臨床' : '未分類';
+        const adoptedCls = (val === a.category) ? ' cat-adopted' : '';
+        return '<span class="cat-tag ' + cls + adoptedCls + '" title="変更した評価者：' + esc(names.join('、')) + (adoptedCls ? '\n（最新の記録値）' : '') + '">' +
+          label + ' ×' + names.length + '件</span>';
+      }).join(' ');
+    }
 
     // 平均点
     const avgHtml = a.avg != null
@@ -490,9 +564,11 @@ function renderResult() {
 
     tr.innerHTML =
       '<td>' + rankHtml + '</td>' +
+      '<td>' + orankHtml + '</td>' +
       '<td style="font-weight:700;color:var(--accent);white-space:nowrap;">' + esc(a.number) + '</td>' +
       '<td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(a.title) + '">' + esc(a.title) + '</td>' +
-      '<td>' + catHtml + '</td>' +
+      '<td>' + selfCatHtml + '</td>' +
+      '<td>' + changeHtml + '</td>' +
       '<td>' + avgHtml + '</td>' +
       '<td style="text-align:center;">' + a.evalCount + '</td>' +
       '<td><div class="score-cell">' + detailHtml + '</div></td>' +
@@ -528,8 +604,8 @@ function renderStats() {
 
   // 全体サマリー
   const totAvg = scored.length > 0 ? (scored.reduce((s,a)=>s+a.avg,0)/scored.length).toFixed(2) : '—';
-  const basicScored = scored.filter(a=>a.category==='basic');
-  const clinicalScored = scored.filter(a=>a.category==='clinical');
+  const basicScored = scored.filter(a=>a.selfCategory==='basic');
+  const clinicalScored = scored.filter(a=>a.selfCategory==='clinical');
   addStatCard(grid, '📊 全体サマリー', [
     ['総演題数', aggregated.length + '件'],
     ['評価済み演題', scored.length + '件'],
@@ -641,7 +717,7 @@ function exportCsv() {
   const rows = [];
 
   // ヘッダー行
-  const header = ['順位（区分別）','演題番号','タイトル','区分','平均点','評価者数'];
+  const header = ['順位（区分別・自己申告基準）','順位（全体）','演題番号','タイトル','区分（自己申告）','区分（変更後・件数/評価者）','区分（最新記録・参考）','平均点','評価者数'];
   allReviewers.forEach(rn => { header.push(rn + '_スコア'); header.push(rn + '_コメント'); });
   rows.push(header);
 
@@ -653,12 +729,22 @@ function exportCsv() {
   });
 
   sorted.forEach(a => {
-    const catLabel = a.category === 'basic' ? '基礎' : a.category === 'clinical' ? '臨床' : '未分類';
+    const catLabelOf = c => c === 'basic' ? '基礎' : c === 'clinical' ? '臨床' : '未分類';
+    const selfCatLabel = catLabelOf(a.selfCategory);
+    const changeLabel = a.changeCount > 0
+      ? Object.entries(a.changesByValue).map(([val, names]) =>
+          catLabelOf(val) + '×' + names.length + '件（' + names.join('、') + '）'
+        ).join(' / ')
+      : '変更なし';
+    const adoptedLabel = catLabelOf(a.category);
     const row = [
       a.rank != null ? a.rank : '',
+      a.overallRank != null ? a.overallRank : '',
       a.number,
       a.title,
-      catLabel,
+      selfCatLabel,
+      changeLabel,
+      adoptedLabel,
       a.avg != null ? a.avg.toFixed(2) : '',
       a.evalCount,
     ];
