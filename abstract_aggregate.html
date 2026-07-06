@@ -290,9 +290,23 @@ dropZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', e => loadFiles([...e.target.files]));
 
 function loadFiles(files) {
+  // ファイルの読み込みは非同期（FileReader）で行われ、完了する順番はファイルサイズ等により
+  // 選択・ドロップした順序と一致しない場合がある。selfDeclaredCategory を持たない旧形式のJSONを
+  // 読み込んだ際のフォールバック処理（読み込み順で最初の値を自己申告区分とみなす）が
+  // ドロップの度に結果が変わってしまわないよう、各ファイルの結果を選択順のスロットに格納してから
+  // まとめて reviewers に反映する。
+  const results = new Array(files.length);
   let pending = files.length;
-  files.forEach(file => {
-    if (!file.name.endsWith('.json')) { pending--; return; }
+  if (pending === 0) return;
+
+  const finish = () => {
+    results.forEach(r => { if (r) reviewers[r.reviewer] = r.confirmed; });
+    renderReviewerList();
+    updateAggregateBtn();
+  };
+
+  files.forEach((file, idx) => {
+    if (!file.name.endsWith('.json')) { pending--; if (pending === 0) finish(); return; }
     const r = new FileReader();
     r.onload = () => {
       try {
@@ -306,10 +320,15 @@ function loadFiles(files) {
 
         // 確定済みのみ保持
         const confirmed = abstracts.filter(a => a.status === 'confirmed');
-        reviewers[reviewer] = confirmed;
+        results[idx] = { reviewer, confirmed };
       } catch(e) { alert(file.name + ' の読み込みに失敗しました。'); }
       pending--;
-      if (pending === 0) { renderReviewerList(); updateAggregateBtn(); }
+      if (pending === 0) finish();
+    };
+    r.onerror = () => {
+      alert(file.name + ' の読み込みに失敗しました。');
+      pending--;
+      if (pending === 0) finish();
     };
     r.readAsText(file);
   });
@@ -373,14 +392,19 @@ function aggregate() {
     abs.forEach(a => {
       const key = a.number;
       if (!map.has(key)) {
-        map.set(key, { number: a.number, title: a.title, categoryByReviewer: {}, reviewerScores: {} });
+        map.set(key, { number: a.number, title: a.title, categoryByReviewer: {}, selfDeclaredByReviewer: {}, reviewerScores: {} });
       }
       const entry = map.get(key);
       // タイトル：後勝ち
       if (a.title) entry.title = a.title;
-      // 区分：評価者ごとに記録（自己申告後に区分が変更されているケースを検知するため）
+      // 区分（最終確定値）：評価者ごとに記録
       const cat = a.category || '';
       if (cat) entry.categoryByReviewer[rName] = cat;
+      // 自己申告区分：査読ツール側でPDF読み込み時に記録された不変値（selfDeclaredCategory）を
+      // 評価者ごとに記録する。同一演題番号が同じ評価者のJSON内に複数回登場した場合は
+      // 最後に読み込んだレコードの値で上書きする（＝その評価者の最終的な確定内容を採用）。
+      const sd = a.selfDeclaredCategory || '';
+      if (sd) entry.selfDeclaredByReviewer[rName] = sd;
       entry.reviewerScores[rName] = { score: a.score, comment: a.comment || '' };
     });
   });
@@ -388,21 +412,42 @@ function aggregate() {
   // 集計
   const allReviewers = Object.keys(reviewers);
   aggregated = [...map.values()].map(entry => {
-    const scores = Object.values(entry.reviewerScores).map(r => r.score).filter(s => s !== null && s !== undefined);
+    // スコアは数値のみを集計対象とする（null／undefined／文字列"null"等の非数値は除外）
+    const scores = Object.values(entry.reviewerScores)
+      .map(r => r.score)
+      .filter(s => typeof s === 'number' && Number.isFinite(s));
     const avg = scores.length > 0 ? scores.reduce((a,b)=>a+b,0) / scores.length : null;
 
-    // 区分の履歴：評価者の読み込み順で最初に記録された値を「自己申告区分」とし、
-    // それ以降に異なる値が記録されていれば「変更」として値ごとに件数・評価者名を保持する
-    const order = allReviewers.filter(rn => entry.categoryByReviewer[rn]);
-    const selfCategory = order.length > 0 ? entry.categoryByReviewer[order[0]] : '';
-    const changesByValue = {}; // 変更後の値 -> [評価者名, ...]
-    for (let i = 1; i < order.length; i++) {
-      const rn = order[i];
-      const c = entry.categoryByReviewer[rn];
-      if (c !== selfCategory) {
-        (changesByValue[c] = changesByValue[c] || []).push(rn);
-      }
+    // 自己申告区分：査読ツールが記録した selfDeclaredCategory（評価者に依存しない不変値）を優先して採用する。
+    // 同一演題であれば本来どの評価者のデータでも同じ値のはずだが、念のため多数決（同数なら最初に記録された値）で解決する。
+    // selfDeclaredCategory を持たない旧形式のJSON（このフィールド追加以前にエクスポートされたもの）が
+    // 混在する場合は、従来どおり「評価者の読み込み順で最初に区分を記録した値」にフォールバックする。
+    const sdEntries = Object.entries(entry.selfDeclaredByReviewer);
+    let selfCategory = '';
+    if (sdEntries.length > 0) {
+      const counts = {};
+      sdEntries.forEach(([, v]) => { counts[v] = (counts[v] || 0) + 1; });
+      selfCategory = sdEntries[0][1];
+      let best = counts[selfCategory];
+      Object.entries(counts).forEach(([v, c]) => { if (c > best) { best = c; selfCategory = v; } });
+    } else {
+      const order = allReviewers.filter(rn => entry.categoryByReviewer[rn]);
+      selfCategory = order.length > 0 ? entry.categoryByReviewer[order[0]] : '';
     }
+
+    // 変更の検知：評価者ごとに「その評価者自身が確定した区分」と「その評価者自身の自己申告区分
+    // （なければ上記で解決した自己申告区分）」を比較する。評価者が1人だけの場合や、
+    // 評価者データの読み込み順（非同期処理の完了順）に左右されず、誰がどの演題をどの値に
+    // 変更したかを常に正しく特定できる。
+    const changesByValue = {}; // 変更後の値 -> [評価者名, ...]
+    allReviewers.forEach(rn => {
+      const finalCat = entry.categoryByReviewer[rn];
+      if (!finalCat) return;
+      const baseline = entry.selfDeclaredByReviewer[rn] || selfCategory;
+      if (baseline && finalCat !== baseline) {
+        (changesByValue[finalCat] = changesByValue[finalCat] || []).push(rn);
+      }
+    });
     const changeValues = Object.keys(changesByValue);
     const changeCount = changeValues.reduce((s, v) => s + changesByValue[v].length, 0);
 
@@ -414,6 +459,7 @@ function aggregate() {
     if (changeValues.length === 1) {
       category = changeValues[0];
     } else if (changeValues.length > 1) {
+      const order = allReviewers.filter(rn => entry.categoryByReviewer[rn]);
       category = order.length > 0 ? entry.categoryByReviewer[order[order.length - 1]] : selfCategory;
     }
 
@@ -645,10 +691,10 @@ function renderStats() {
   // 評価者ごとの統計
   allReviewers.forEach(rn => {
     const abs = reviewers[rn];
-    const scores = abs.map(a=>a.score).filter(s=>s!=null);
+    const scores = abs.map(a=>a.score).filter(s=>typeof s==='number' && Number.isFinite(s));
     const avg = scores.length > 0 ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(2) : '—';
     const dist = {1:0,2:0,3:0,4:0,5:0};
-    scores.forEach(s => dist[s]++);
+    scores.forEach(s => { if (dist[s] !== undefined) dist[s]++; });
     addStatCard(grid, '👤 ' + rn, [
       ['確定済み評価', abs.length + '件'],
       ['評価した演題（スコアあり）', scores.length + '件'],
